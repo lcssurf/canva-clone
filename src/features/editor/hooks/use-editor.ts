@@ -1,66 +1,66 @@
-// src/features/editor/hooks/use-editor.ts
 import { fabric } from "fabric";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useAutoResize } from "./use-auto-resize";
+import { useCallback, useState, useMemo, useRef } from "react";
+
 import { 
-  BuildEditorProps, 
-  CIRCLE_OPTIONS, 
-  DIAMOND_OPTIONS, 
   Editor, 
-  EditorHookProps, 
-  FILL_COLOR, 
-  FONT_FAMILY, 
-  FONT_SIZE, 
-  FONT_WEIGHT, 
-  JSON_KEYS, 
-  RECTANGLE_OPTIONS, 
-  STROKE_COLOR, 
-  STROKE_DASH_ARRAY, 
-  STROKE_WIDTH, 
-  TEXT_OPTIONS, 
-  TRIANGLE_OPTIONS 
-} from "../types";
+  FILL_COLOR,
+  STROKE_WIDTH,
+  STROKE_COLOR,
+  CIRCLE_OPTIONS,
+  DIAMOND_OPTIONS,
+  TRIANGLE_OPTIONS,
+  BuildEditorProps, 
+  RECTANGLE_OPTIONS,
+  EditorHookProps,
+  STROKE_DASH_ARRAY,
+  TEXT_OPTIONS,
+  FONT_FAMILY,
+  FONT_WEIGHT,
+  FONT_SIZE,
+  JSON_KEYS,
+} from "@/features/editor/types";
+import { useHistory } from "@/features/editor/hooks/use-history";
 import { 
   createFilter, 
   downloadFile, 
-  isTextType, 
-  transformText 
-} from "../utils";
-import { useCanvasEvents } from "./use-canvas-events";
-import { useClipboard } from "./use-clipboard";
-import { useHistory } from "./use-history";
-import { useHotkeys } from "./use-hotkeys";
-import { useWindowEvents } from "./use-window-events";
-import { useProjectStore } from "@/lib/project-store";
+  isTextType,
+  transformText
+} from "@/features/editor/utils";
+import { useHotkeys } from "@/features/editor/hooks/use-hotkeys";
+import { useClipboard } from "@/features/editor/hooks/use-clipboard";
+import { useAutoResize } from "@/features/editor/hooks/use-auto-resize";
+import { useCanvasEvents } from "@/features/editor/hooks/use-canvas-events";
+import { useWindowEvents } from "@/features/editor/hooks/use-window-events";
+import { useLoadState } from "@/features/editor/hooks/use-load-state";
 
 const buildEditor = ({
   save,
+  undo,
+  redo,
   canRedo,
   canUndo,
-  redo,
-  undo,
   autoZoom,
   copy,
   paste,
   canvas,
   fillColor,
   fontFamily,
-  setFillColor,
   setFontFamily,
-  setStrokeColor,
-  setStrokeWidth,
-  setStrokeDashArray,
+  setFillColor,
   strokeColor,
-  strokeDashArray,
+  setStrokeColor,
   strokeWidth,
+  setStrokeWidth,
   selectedObjects,
+  strokeDashArray,
+  setStrokeDashArray,
 }: BuildEditorProps): Editor => {
   const generateSaveOptions = () => {
     const { width, height, left, top } = getWorkspace() as fabric.Rect;
 
     return {
-      name: "Page",
-      format: "json",
+      name: "Image",
+      format: "png",
       quality: 1,
       width,
       height,
@@ -101,9 +101,10 @@ const buildEditor = ({
 
   const saveJson = async () => {
     const dataUrl = canvas.toJSON(JSON_KEYS);
+
     await transformText(dataUrl.objects);
     const fileString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(dataUrl, null, "\t")
+      JSON.stringify(dataUrl, null, "\t"),
     )}`;
     downloadFile(fileString, "json");
   };
@@ -116,8 +117,30 @@ const buildEditor = ({
     });
   };
 
+  // Adicionada função loadFromJSON que estava faltando
+  const loadFromJSON = (jsonState: string | object) => {
+    try {
+      const data = typeof jsonState === 'string' ? JSON.parse(jsonState) : jsonState;
+      
+      canvas.loadFromJSON(data, () => {
+        canvas.renderAll();
+        autoZoom();
+        
+        // Garantir que o workspace está sempre no fundo
+        const workspace = getWorkspace();
+        if (workspace) {
+          workspace.sendToBack();
+        }
+      });
+    } catch (error) {
+      console.error("Error loading JSON:", error);
+    }
+  };
+
   const getWorkspace = () => {
-    return canvas.getObjects().find((object) => object.name === "clip");
+    return canvas
+    .getObjects()
+    .find((object) => object.name === "clip");
   };
 
   const center = (object: fabric.Object) => {
@@ -136,15 +159,27 @@ const buildEditor = ({
     canvas.setActiveObject(object);
   };
 
+  // Adicionada função changeSize que estava faltando no objeto retornado
+  const changeSize = (value: { width: number; height: number }) => {
+    const workspace = getWorkspace();
+
+    workspace?.set(value);
+    autoZoom();
+    save();
+  };
+
   return {
     savePng,
     saveJpg,
     saveSvg,
     saveJson,
     loadJson,
-    canRedo,
+    loadFromJSON, // Adicionada esta função
     canUndo,
+    canRedo,
     autoZoom,
+    getWorkspace,
+    changeSize, // Adicionada esta função
     zoomIn: () => {
       let zoomRatio = canvas.getZoom();
       zoomRatio += 0.05;
@@ -160,23 +195,36 @@ const buildEditor = ({
       const center = canvas.getCenter();
       canvas.zoomToPoint(
         new fabric.Point(center.left, center.top),
-        zoomRatio < 0.2 ? 0.2 : zoomRatio
+        zoomRatio < 0.2 ? 0.2 : zoomRatio,
       );
     },
-    getWorkspace,
+    zoomToFit: () => autoZoom(), // Adicionada esta função
+    centerWorkspace: () => {
+      const workspace = getWorkspace();
+      if (workspace) {
+        canvas.centerObject(workspace);
+      }
+    }, // Adicionada esta função
     changeBackground: (value: string) => {
       const workspace = getWorkspace();
       workspace?.set({ fill: value });
       canvas.renderAll();
       save();
     },
-    changeSize: (value: { width: number; height: number }) => {
-      const workspace = getWorkspace();
-
-      workspace?.set(value);
-      autoZoom();
-      save();
+    enableDrawingMode: () => {
+      canvas.discardActiveObject();
+      canvas.renderAll();
+      canvas.isDrawingMode = true;
+      canvas.freeDrawingBrush.width = strokeWidth;
+      canvas.freeDrawingBrush.color = strokeColor;
     },
+    disableDrawingMode: () => {
+      canvas.isDrawingMode = false;
+    },
+    onUndo: () => undo(),
+    onRedo: () => redo(),
+    onCopy: () => copy(),
+    onPaste: () => paste(),
     changeImageFilter: (value: string) => {
       const objects = canvas.getActiveObjects();
       objects.forEach((object) => {
@@ -204,7 +252,7 @@ const buildEditor = ({
         },
         {
           crossOrigin: "anonymous",
-        }
+        },
       );
     },
     delete: () => {
@@ -212,8 +260,11 @@ const buildEditor = ({
       canvas.discardActiveObject();
       canvas.renderAll();
     },
-    copy,
-    paste,
+    deleteSelected: () => { // Alias para delete
+      canvas.getActiveObjects().forEach((object) => canvas.remove(object));
+      canvas.discardActiveObject();
+      canvas.renderAll();
+    },
     addText: (value, options) => {
       const object = new fabric.Textbox(value, {
         ...TEXT_OPTIONS,
@@ -234,91 +285,127 @@ const buildEditor = ({
 
       return value;
     },
-    changeFontFamily: (value: string) => {
-      setFontFamily(value);
+    changeFontSize: (value: number) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
-          object._set("fontFamily", value);
+          // @ts-ignore
+          // Faulty TS library, fontSize exists.
+          object.set({ fontSize: value });
         }
       });
       canvas.renderAll();
     },
-    changeFillColor: (value: string) => {
-      setFillColor(value);
-      canvas.getActiveObjects().forEach((object) => {
-        object.set({ fill: value });
-      });
-      canvas.renderAll();
-    },
-    changeStrokeColor: (value: string) => {
-      setStrokeColor(value);
-      canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          object.set({ fill: value });
-          return;
-        }
+    getActiveFontSize: () => {
+      const selectedObject = selectedObjects[0];
 
-        object.set({ stroke: value });
-      });
-      canvas.renderAll();
-    },
-    changeStrokeWidth: (value: number) => {
-      setStrokeWidth(value);
-      canvas.getActiveObjects().forEach((object) => {
-        object.set({ strokeWidth: value });
-      });
-      canvas.renderAll();
-    },
-    changeFontWeight: (value: number) => {
-      canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-ignore
-          object.set({ fontWeight: value });
-        }
-      });
-      canvas.renderAll();
-    },
-    changeFontStyle: (value: string) => {
-      canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-ignore
-          object.set({ fontStyle: value });
-        }
-      });
-      canvas.renderAll();
-    },
-    changeLinethrough: (value: boolean) => {
-      canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-ignore
-          object.set({ linethrough: value });
-        }
-      });
-      canvas.renderAll();
-    },
-    changeUnderline: (value: boolean) => {
-      canvas.getActiveObjects().forEach((object) => {
-        if (isTextType(object.type)) {
-          // @ts-ignore
-          object.set({ underline: value });
-        }
-      });
-      canvas.renderAll();
+      if (!selectedObject) {
+        return FONT_SIZE;
+      }
+
+      // @ts-ignore
+      // Faulty TS library, fontSize exists.
+      const value = selectedObject.get("fontSize") || FONT_SIZE;
+
+      return value;
     },
     changeTextAlign: (value: string) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
           // @ts-ignore
+          // Faulty TS library, textAlign exists.
           object.set({ textAlign: value });
         }
       });
       canvas.renderAll();
     },
-    changeFontSize: (value: number) => {
+    getActiveTextAlign: () => {
+      const selectedObject = selectedObjects[0];
+
+      if (!selectedObject) {
+        return "left";
+      }
+
+      // @ts-ignore
+      // Faulty TS library, textAlign exists.
+      const value = selectedObject.get("textAlign") || "left";
+
+      return value;
+    },
+    changeFontUnderline: (value: boolean) => {
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
           // @ts-ignore
-          object.set({ fontSize: value });
+          // Faulty TS library, underline exists.
+          object.set({ underline: value });
+        }
+      });
+      canvas.renderAll();
+    },
+    getActiveFontUnderline: () => {
+      const selectedObject = selectedObjects[0];
+
+      if (!selectedObject) {
+        return false;
+      }
+
+      // @ts-ignore
+      // Faulty TS library, underline exists.
+      const value = selectedObject.get("underline") || false;
+
+      return value;
+    },
+    changeFontLinethrough: (value: boolean) => {
+      canvas.getActiveObjects().forEach((object) => {
+        if (isTextType(object.type)) {
+          // @ts-ignore
+          // Faulty TS library, linethrough exists.
+          object.set({ linethrough: value });
+        }
+      });
+      canvas.renderAll();
+    },
+    getActiveFontLinethrough: () => {
+      const selectedObject = selectedObjects[0];
+
+      if (!selectedObject) {
+        return false;
+      }
+
+      // @ts-ignore
+      // Faulty TS library, linethrough exists.
+      const value = selectedObject.get("linethrough") || false;
+
+      return value;
+    },
+    changeFontStyle: (value: string) => {
+      canvas.getActiveObjects().forEach((object) => {
+        if (isTextType(object.type)) {
+          // @ts-ignore
+          // Faulty TS library, fontStyle exists.
+          object.set({ fontStyle: value });
+        }
+      });
+      canvas.renderAll();
+    },
+    getActiveFontStyle: () => {
+      const selectedObject = selectedObjects[0];
+
+      if (!selectedObject) {
+        return "normal";
+      }
+
+      // @ts-ignore
+      // Faulty TS library, fontStyle exists.
+      const value = selectedObject.get("fontStyle") || "normal";
+
+      return value;
+    },
+    changeFontWeight: (value: number) => {
+      canvas.getActiveObjects().forEach((object) => {
+        if (isTextType(object.type)) {
+          // @ts-ignore
+          // Faulty TS library, fontWeight exists.
+          object.set({ fontWeight: value });
         }
       });
       canvas.renderAll();
@@ -335,7 +422,7 @@ const buildEditor = ({
       });
 
       canvas.renderAll();
-
+      
       const workspace = getWorkspace();
       workspace?.sendToBack();
     },
@@ -345,9 +432,48 @@ const buildEditor = ({
       });
 
       canvas.renderAll();
-
       const workspace = getWorkspace();
       workspace?.sendToBack();
+    },
+    changeFontFamily: (value: string) => {
+      setFontFamily(value);
+      canvas.getActiveObjects().forEach((object) => {
+        if (isTextType(object.type)) {
+          // @ts-ignore
+          // Faulty TS library, fontFamily exists.
+          object.set({ fontFamily: value });
+        }
+      });
+      canvas.renderAll();
+    },
+    changeFillColor: (value: string) => {
+      setFillColor(value);
+      canvas.getActiveObjects().forEach((object) => {
+        object.set({ fill: value });
+      });
+      canvas.renderAll();
+    },
+    changeStrokeColor: (value: string) => {
+      setStrokeColor(value);
+      canvas.getActiveObjects().forEach((object) => {
+        // Text types don't have stroke
+        if (isTextType(object.type)) {
+          object.set({ fill: value });
+          return;
+        }
+
+        object.set({ stroke: value });
+      });
+      canvas.freeDrawingBrush.color = value;
+      canvas.renderAll();
+    },
+    changeStrokeWidth: (value: number) => {
+      setStrokeWidth(value);
+      canvas.getActiveObjects().forEach((object) => {
+        object.set({ strokeWidth: value });
+      });
+      canvas.freeDrawingBrush.width = value;
+      canvas.renderAll();
     },
     changeStrokeDashArray: (value: number[]) => {
       setStrokeDashArray(value);
@@ -442,12 +568,81 @@ const buildEditor = ({
           strokeDashArray: strokeDashArray,
         }
       );
-
       addToCanvas(object);
     },
+    // Funções de adicionar formas (aliases)
+    addShape: (shape: string, options?: any) => {
+      switch (shape) {
+        case "rectangle":
+          const rectObject = new fabric.Rect({
+            ...RECTANGLE_OPTIONS,
+            fill: fillColor,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            strokeDashArray: strokeDashArray,
+            ...options,
+          });
+          addToCanvas(rectObject);
+          break;
+        case "circle":
+          const circleObject = new fabric.Circle({
+            ...CIRCLE_OPTIONS,
+            fill: fillColor,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            strokeDashArray: strokeDashArray,
+            ...options,
+          });
+          addToCanvas(circleObject);
+          break;
+        case "triangle":
+          const triangleObject = new fabric.Triangle({
+            ...TRIANGLE_OPTIONS,
+            fill: fillColor,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            strokeDashArray: strokeDashArray,
+            ...options,
+          });
+          addToCanvas(triangleObject);
+          break;
+      }
+    },
+    // Funções de undo/redo (aliases)
+    undo: () => undo(),
+    redo: () => redo(),
+    // Funções de copy/paste (aliases)
+    copy: () => copy(),
+    paste: () => paste(),
+    // Função saveState para compatibilidade
+    saveState: () => save(),
     canvas,
-    undo,
-    redo,
+    getActiveFontWeight: () => {
+      const selectedObject = selectedObjects[0];
+
+      if (!selectedObject) {
+        return FONT_WEIGHT;
+      }
+
+      // @ts-ignore
+      // Faulty TS library, fontWeight exists.
+      const value = selectedObject.get("fontWeight") || FONT_WEIGHT;
+
+      return value;
+    },
+    getActiveFontFamily: () => {
+      const selectedObject = selectedObjects[0];
+
+      if (!selectedObject) {
+        return fontFamily;
+      }
+
+      // @ts-ignore
+      // Faulty TS library, fontFamily exists.
+      const value = selectedObject.get("fontFamily") || fontFamily;
+
+      return value;
+    },
     getActiveFillColor: () => {
       const selectedObject = selectedObjects[0];
 
@@ -457,6 +652,7 @@ const buildEditor = ({
 
       const value = selectedObject.get("fill") || fillColor;
 
+      // Currently, gradients & patterns are not supported
       return value as string;
     },
     getActiveStrokeColor: () => {
@@ -492,97 +688,14 @@ const buildEditor = ({
 
       return value;
     },
-    getActiveFontFamily: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return fontFamily;
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("fontFamily") || fontFamily;
-
-      return value;
-    },
-    getActiveFontWeight: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return FONT_WEIGHT;
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("fontWeight") || FONT_WEIGHT;
-
-      return value;
-    },
-    getActiveFontStyle: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return "normal";
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("fontStyle") || "normal";
-
-      return value;
-    },
-    getActiveLinethrough: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return false;
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("linethrough") || false;
-
-      return value;
-    },
-    getActiveUnderline: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return false;
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("underline") || false;
-
-      return value;
-    },
-    getActiveTextAlign: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return "left";
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("textAlign") || "left";
-
-      return value;
-    },
-    getActiveFontSize: () => {
-      const selectedObject = selectedObjects[0];
-
-      if (!selectedObject) {
-        return FONT_SIZE;
-      }
-
-      // @ts-ignore
-      const value = selectedObject.get("fontSize") || FONT_SIZE;
-
-      return value;
-    },
+    selectedObjects,
   };
 };
 
 export const useEditor = ({
   defaultState,
-  defaultWidth,
   defaultHeight,
+  defaultWidth,
   clearSelectionCallback,
   saveCallback,
 }: EditorHookProps) => {
@@ -600,18 +713,19 @@ export const useEditor = ({
   const [strokeWidth, setStrokeWidth] = useState(STROKE_WIDTH);
   const [strokeDashArray, setStrokeDashArray] = useState<number[]>(STROKE_DASH_ARRAY);
 
-  // Integração com store de projetos
-  const { updateCurrentPage } = useProjectStore();
-
   useWindowEvents();
 
-  const { save, canRedo, canUndo, redo, undo, setHistoryIndex, setCanvasState } = useHistory({
+  const { 
+    save, 
+    canRedo, 
+    canUndo, 
+    undo, 
+    redo,
+    canvasHistory,
+    setHistoryIndex,
+  } = useHistory({ 
     canvas,
-    saveCallback: (state) => {
-      saveCallback?.(state);
-      // Atualiza a página atual no store
-      updateCurrentPage(state);
-    },
+    saveCallback
   });
 
   const { copy, paste } = useClipboard({ canvas });
@@ -628,10 +742,29 @@ export const useEditor = ({
     clearSelectionCallback,
   });
 
-  useHotkeys({ canvas, undo, redo, copy, paste, save });
+  useHotkeys({
+    undo,
+    redo,
+    copy,
+    paste,
+    save,
+    canvas,
+  });
+
+  // Comentar temporariamente o useLoadState para testar
+  // useLoadState({
+  //   canvas,
+  //   autoZoom,
+  //   initialState,
+  //   canvasHistory,
+  //   setHistoryIndex,
+  // });
 
   const editor = useMemo(() => {
+    console.log("🔄 Editor useMemo triggered", { canvas: !!canvas });
+    
     if (canvas) {
+      console.log("✅ Creating editor instance");
       return buildEditor({
         save,
         undo,
@@ -643,36 +776,38 @@ export const useEditor = ({
         paste,
         canvas,
         fillColor,
-        strokeColor,
         strokeWidth,
-        strokeDashArray,
-        fontFamily,
+        strokeColor,
         setFillColor,
         setStrokeColor,
         setStrokeWidth,
-        setStrokeDashArray,
-        setFontFamily,
+        strokeDashArray,
         selectedObjects,
+        setStrokeDashArray,
+        fontFamily,
+        setFontFamily,
       });
     }
 
+    console.log("❌ Canvas not ready, editor undefined");
     return undefined;
-  }, [
-    save,
+  }, 
+  [
+    canRedo,
+    canUndo,
     undo,
     redo,
-    canUndo,
-    canRedo,
+    save,
     autoZoom,
     copy,
     paste,
     canvas,
     fillColor,
-    strokeColor,
     strokeWidth,
+    strokeColor,
+    selectedObjects,
     strokeDashArray,
     fontFamily,
-    selectedObjects,
   ]);
 
   const init = useCallback(
@@ -683,6 +818,8 @@ export const useEditor = ({
       initialCanvas: fabric.Canvas;
       initialContainer: HTMLDivElement;
     }) => {
+      console.log("🚀 Initializing editor...", { initialCanvas, initialContainer });
+
       fabric.Object.prototype.set({
         cornerColor: "#FFF",
         cornerStyle: "circle",
@@ -706,6 +843,11 @@ export const useEditor = ({
         }),
       });
 
+      console.log("📐 Creating workspace:", { 
+        width: initialWidth.current, 
+        height: initialHeight.current 
+      });
+
       initialCanvas.setWidth(initialContainer.offsetWidth);
       initialCanvas.setHeight(initialContainer.offsetHeight);
 
@@ -713,21 +855,19 @@ export const useEditor = ({
       initialCanvas.centerObject(initialWorkspace);
       initialCanvas.clipPath = initialWorkspace;
 
+      console.log("🎨 Setting canvas and container state");
       setCanvas(initialCanvas);
       setContainer(initialContainer);
 
-      const currentCanvas = initialCanvas.toJSON(JSON_KEYS);
-      const currentHeight = initialHeight.current;
-      const currentWidth = initialWidth.current;
-
-      setCanvasState({
-        width: currentWidth,
-        height: currentHeight,
-        json: currentCanvas,
-      });
+      const currentState = JSON.stringify(
+        initialCanvas.toJSON(JSON_KEYS)
+      );
+      canvasHistory.current = [currentState];
       setHistoryIndex(0);
+
+      console.log("✅ Editor initialization complete");
     },
-    []
+    [setHistoryIndex] // Manter apenas as dependências essenciais
   );
 
   return { init, editor };
