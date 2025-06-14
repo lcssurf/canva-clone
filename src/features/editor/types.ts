@@ -173,11 +173,12 @@ export interface EditorHookProps {
   defaultWidth?: number;
   defaultHeight?: number;
   clearSelectionCallback?: () => void;
-  saveCallback?: (values: {
-    json: string;
-    height: number;
-    width: number;
-  }) => void;
+  // saveCallback?: (values: {
+  //   json: string;
+  //   height: number;
+  //   width: number;
+  // }) => void;
+  saveCallback?: (values: any) => void; // Modificado para aceitar any
 };
 
 export type BuildEditorProps = {
@@ -261,4 +262,6 @@ export interface Editor {
   getActiveStrokeWidth: () => number;
   getActiveStrokeDashArray: () => number[];
   selectedObjects: fabric.Object[];
+
+  loadFromJSON: (jsonState: string | object) => void;
 };

@@ -108,7 +108,7 @@ export const Navbar = ({
         </Hint>
         <Hint label="Undo" side="bottom" sideOffset={10}>
           <Button
-            disabled={!editor?.canUndo()}
+            disabled={!editor?.canUndo}
             variant="ghost"
             size="icon"
             onClick={() => editor?.onUndo()}
@@ -118,7 +118,7 @@ export const Navbar = ({
         </Hint>
         <Hint label="Redo" side="bottom" sideOffset={10}>
           <Button
-            disabled={!editor?.canRedo()}
+            disabled={!editor?.canRedo}
             variant="ghost"
             size="icon"
             onClick={() => editor?.onRedo()}

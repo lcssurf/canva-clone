@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ResponseType } from "@/features/projects/api/use-get-project";
 import { useUpdateProject } from "@/features/projects/api/use-update-project";
+import { useGetPage } from "@/features/pages/api/use-get-page";
+import { useUpdatePage } from "@/features/pages/api/use-update-page";
 
 import { 
   ActiveTool, 
@@ -30,13 +32,35 @@ import { AiSidebar } from "@/features/editor/components/ai-sidebar";
 import { TemplateSidebar } from "@/features/editor/components/template-sidebar";
 import { RemoveBgSidebar } from "@/features/editor/components/remove-bg-sidebar";
 import { SettingsSidebar } from "@/features/editor/components/settings-sidebar";
+import { PagesNavigation } from "@/features/editor/components/pages-sidebar";
+import { Loader } from "lucide-react";
 
 interface EditorProps {
   initialData: ResponseType["data"];
-};
+  pages: { id: string; title?: string; order: number; width?: number; height?: number }[];
+  activePageId: string;
+  setActivePageId: (id: string) => void;
+  createPage: (req: { title?: string; width: number; height: number }) => void;
+}
 
-export const Editor = ({ initialData }: EditorProps) => {
+export const Editor = ({ 
+  initialData, 
+  pages, 
+  activePageId, 
+  setActivePageId, 
+  createPage 
+}: EditorProps) => {
   const { mutate } = useUpdateProject(initialData.id);
+
+  // Hook para carregar estado da página ativa
+  const { 
+    data: pageData, 
+    isLoading: loadingPage, 
+    isError: errorPage 
+  } = useGetPage(initialData.id, activePageId);
+
+  // Hook para salvar alterações da página
+  const { mutate: savePage } = useUpdatePage(initialData.id, activePageId);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSave = useCallback(
@@ -51,6 +75,14 @@ export const Editor = ({ initialData }: EditorProps) => {
     500
   ), [mutate]);
 
+  // debounce do save para página específica
+  const debouncedSavePage = useCallback(
+    debounce((fabricState: any) => {
+      savePage({ fabricState });
+    }, 500),
+    [savePage]
+  );
+
   const [activeTool, setActiveTool] = useState<ActiveTool>("select");
 
   const onClearSelection = useCallback(() => {
@@ -59,12 +91,19 @@ export const Editor = ({ initialData }: EditorProps) => {
     }
   }, [activeTool]);
 
+  // Use page data when available, fallback to project data
+  const currentPageData = pageData || {
+    fabricState: '{"objects":[],"background":""}',
+    width: initialData.width,
+    height: initialData.height,
+  };
+
   const { init, editor } = useEditor({
-    defaultState: initialData.json,
-    defaultWidth: initialData.width,
-    defaultHeight: initialData.height,
+    defaultState: currentPageData.fabricState,
+    defaultWidth: currentPageData.width,
+    defaultHeight: currentPageData.height,
     clearSelectionCallback: onClearSelection,
-    saveCallback: debouncedSave,
+    saveCallback: debouncedSavePage, // Save to current page instead of project
   });
 
   const onChangeActiveTool = useCallback((tool: ActiveTool) => {
@@ -86,6 +125,7 @@ export const Editor = ({ initialData }: EditorProps) => {
   const canvasRef = useRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Inicializa o canvas do Fabric.js
   useEffect(() => {
     const canvas = new fabric.Canvas(canvasRef.current, {
       controlsAboveOverlay: true,
@@ -102,6 +142,46 @@ export const Editor = ({ initialData }: EditorProps) => {
     };
   }, [init]);
 
+  // Reset canvas when active page changes
+  useEffect(() => {
+    if (editor && pageData) {
+      try {
+        const fabricState = typeof pageData.fabricState === 'string' 
+          ? JSON.parse(pageData.fabricState) 
+          : pageData.fabricState;
+
+        editor.canvas.loadFromJSON(fabricState, () => {
+          editor.canvas.renderAll();
+        });
+
+        // Update canvas dimensions
+        editor.changeSize({
+          width: pageData.width,
+          height: pageData.height,
+        });
+      } catch (error) {
+        console.error("Error loading page data:", error);
+      }
+    }
+  }, [activePageId, pageData, editor]);
+
+  // Handle create page with current dimensions
+  const handleCreatePage = useCallback(() => {
+    const currentPage = pages.find(p => p.id === activePageId);
+    createPage({
+      width: currentPage?.width || currentPageData.width,
+      height: currentPage?.height || currentPageData.height,
+    });
+  }, [pages, activePageId, currentPageData, createPage]);
+
+  if (loadingPage) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center">
+        <Loader className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
       <Navbar
@@ -110,7 +190,12 @@ export const Editor = ({ initialData }: EditorProps) => {
         activeTool={activeTool}
         onChangeActiveTool={onChangeActiveTool}
       />
+
+      
+
       <div className="absolute h-[calc(100%-68px)] w-full top-[68px] flex">
+        
+        
         <Sidebar
           activeTool={activeTool}
           onChangeActiveTool={onChangeActiveTool}
@@ -192,7 +277,16 @@ export const Editor = ({ initialData }: EditorProps) => {
             onChangeActiveTool={onChangeActiveTool}
             key={JSON.stringify(editor?.canvas.getActiveObject())}
           />
+              {/* Pages Sidebar */}
+        <PagesNavigation
+          pages={pages}
+          activePageId={activePageId}
+          setActivePageId={setActivePageId}
+          createPage={handleCreatePage}
+          projectId={initialData.id}
+        />
           <div className="flex-1 h-[calc(100%-124px)] bg-muted" ref={containerRef}>
+        
             <canvas ref={canvasRef} />
           </div>
           <Footer editor={editor} />

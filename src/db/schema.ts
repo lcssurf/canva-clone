@@ -7,6 +7,7 @@ import {
   text,
   primaryKey,
   integer,
+  jsonb,
 } from "drizzle-orm/pg-core"
 import type { AdapterAccountType } from "next-auth/adapters"
  
@@ -102,7 +103,7 @@ export const projects = pgTable("project", {
     .references(() => users.id, {
       onDelete: "cascade",
     }),
-  json: text("json").notNull(),
+  // json: text("json").notNull(),
   height: integer("height").notNull(),
   width: integer("width").notNull(),
   thumbnailUrl: text("thumbnailUrl"),
@@ -112,14 +113,43 @@ export const projects = pgTable("project", {
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull(),
 });
 
-export const projectsRelations = relations(projects, ({ one }) => ({
+
+
+export const pages = pgTable("page", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  projectId: text("projectId")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  order: integer("order").notNull().default(0),
+  title: text("title"),               // opcional, ex: “Página 1”
+  width: integer("width").notNull(),   // herda as dimensões do projeto, ou torne opcional
+  height: integer("height").notNull(),
+  fabricState: jsonb("fabricState").notNull(),  // aqui fica o canvas.toJSON()
+  thumbnailUrl: text("thumbnailUrl"),           // p/ preview rápido
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull(),
+});
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
   user: one(users, {
     fields: [projects.userId],
     references: [users.id],
   }),
+  pages: many(pages),
+}));
+
+
+export const pagesRelations = relations(pages, ({ one }) => ({
+  project: one(projects, {
+    fields: [pages.projectId],
+    references: [projects.id],
+  }),
 }));
 
 export const projectsInsertSchema = createInsertSchema(projects);
+export const pagesInsertSchema  = createInsertSchema(pages);
 
 export const subscriptions = pgTable("subscription", {
   id: text("id")
