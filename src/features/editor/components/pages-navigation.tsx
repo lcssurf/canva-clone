@@ -4,7 +4,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, MoreHorizontal, X, Copy, Edit3 } from "lucide-react";
+import { Plus, MoreHorizontal, X, Copy, Edit3, Loader } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,10 +24,11 @@ import { cn } from "@/lib/utils";
 
 interface Page {
   id: string;
-  title?: string;
+  title?: string | null;
   order: number;
   width?: number;
   height?: number;
+  fabricState?: any; // Use 'any' for jsonb, or a more specific type if known
 }
 
 interface PagesNavigationProps {
@@ -67,6 +68,14 @@ export const PagesNavigation = ({
     // TODO: Implementar duplicação
     console.log("Duplicate page:", page);
   };
+
+  if (pages.length === 0) {
+    return (
+      <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 overflow-x-auto">
+        <Loader className="h-6 w-6 animate-spin text-gray-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 overflow-x-auto">

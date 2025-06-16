@@ -173,12 +173,11 @@ export interface EditorHookProps {
   defaultWidth?: number;
   defaultHeight?: number;
   clearSelectionCallback?: () => void;
-  // saveCallback?: (values: {
-  //   json: string;
-  //   height: number;
-  //   width: number;
-  // }) => void;
-  saveCallback?: (values: any) => void; // Modificado para aceitar any
+  saveCallback?: (values: {
+    json: string;
+    height: number;
+    width: number;
+  }) => void;
 };
 
 export type BuildEditorProps = {
@@ -262,97 +261,4 @@ export interface Editor {
   getActiveStrokeWidth: () => number;
   getActiveStrokeDashArray: () => number[];
   selectedObjects: fabric.Object[];
-
-  loadFromJSON: (jsonState: string | object) => void;
 };
-
-export interface EditorExtended {
-  // Funções de save
-  savePng: () => void;
-  saveJpg: () => void;
-  saveSvg: () => void;
-  saveJson: () => Promise<void>;
-  loadJson: (json: string) => void;
-  loadFromJSON: (jsonState: string | object) => void;
-
-  // Funções de histórico
-  canUndo: boolean;
-  canRedo: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  undo: () => void;
-  redo: () => void;
-
-  // Funções de zoom e workspace
-  autoZoom: () => void;
-  zoomToFit: () => void; // Adicionada esta função
-  zoomIn: () => void;
-  zoomOut: () => void;
-  getWorkspace: () => fabric.Rect | undefined;
-  changeSize: (value: { width: number; height: number }) => void;
-  centerWorkspace: () => void; // Adicionada esta função
-  changeBackground: (value: string) => void;
-
-  // Funções de desenho
-  enableDrawingMode: () => void;
-  disableDrawingMode: () => void;
-
-  // Funções de clipboard
-  onCopy: () => void;
-  onPaste: () => void;
-  copy: () => void;
-  paste: () => void;
-
-  // Funções de imagem
-  addImage: (value: string) => void;
-  changeImageFilter: (value: string) => void;
-
-  // Funções de objetos
-  delete: () => void;
-  deleteSelected: () => void;
-  bringForward: () => void;
-  sendBackwards: () => void;
-
-  // Funções de texto
-  addText: (value: string, options?: any) => void;
-  changeFontSize: (value: number) => void;
-  getActiveFontSize: () => number;
-  changeTextAlign: (value: string) => void;
-  getActiveTextAlign: () => string;
-  changeFontUnderline: (value: boolean) => void;
-  getActiveFontUnderline: () => boolean;
-  changeFontLinethrough: (value: boolean) => void;
-  getActiveFontLinethrough: () => boolean;
-  changeFontStyle: (value: string) => void;
-  getActiveFontStyle: () => string;
-  changeFontWeight: (value: number) => void;
-  getActiveFontWeight: () => number;
-  changeFontFamily: (value: string) => void;
-  getActiveFontFamily: () => string;
-
-  // Funções de cor e estilo
-  changeFillColor: (value: string) => void;
-  getActiveFillColor: () => string;
-  changeStrokeColor: (value: string) => void;
-  getActiveStrokeColor: () => string;
-  changeStrokeWidth: (value: number) => void;
-  getActiveStrokeWidth: () => number;
-  changeStrokeDashArray: (value: number[]) => void;
-  getActiveStrokeDashArray: () => number[];
-  changeOpacity: (value: number) => void;
-  getActiveOpacity: () => number;
-
-  // Funções de formas
-  addCircle: () => void;
-  addSoftRectangle: () => void;
-  addRectangle: () => void;
-  addTriangle: () => void;
-  addInverseTriangle: () => void;
-  addDiamond: () => void;
-  addShape: (shape: string, options?: any) => void;
-
-  // Estado
-  saveState: () => void;
-  selectedObjects: fabric.Object[];
-  canvas: fabric.Canvas;
-}

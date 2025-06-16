@@ -1,5 +1,5 @@
 import { fabric } from "fabric";
-import { useCallback, useState, useMemo, useRef } from "react";
+import { useCallback, useState, useMemo, useRef, useEffect } from "react";
 
 import { 
   Editor, 
@@ -27,7 +27,7 @@ import {
   transformText
 } from "@/features/editor/utils";
 import { useHotkeys } from "@/features/editor/hooks/use-hotkeys";
-import { useClipboard } from "@/features/editor/hooks//use-clipboard";
+import { useClipboard } from "@/features/editor/hooks/use-clipboard";
 import { useAutoResize } from "@/features/editor/hooks/use-auto-resize";
 import { useCanvasEvents } from "@/features/editor/hooks/use-canvas-events";
 import { useWindowEvents } from "@/features/editor/hooks/use-window-events";
@@ -109,25 +109,32 @@ const buildEditor = ({
     downloadFile(fileString, "json");
   };
 
-  const loadJson = (json: string | object) => {
-    let data: any
-
-    if (typeof json === "string") {
-    try {
-      data = JSON.parse(json);
-    } catch (err) {
-      console.error("Invalid JSON passed to loadJson:", err, json);
-      return;
-    }
-  } else {
-    data = json;
-  }
-
-    // data = JSON.parse(json);
+  const loadJson = (json: string) => {
+    const data = JSON.parse(json);
 
     canvas.loadFromJSON(data, () => {
       autoZoom();
     });
+  };
+
+  // Adicionada função loadFromJSON que estava faltando
+  const loadFromJSON = (jsonState: string | object) => {
+    try {
+      const data = typeof jsonState === 'string' ? JSON.parse(jsonState) : jsonState;
+      
+      canvas.loadFromJSON(data, () => {
+        canvas.renderAll();
+        autoZoom();
+        
+        // Garantir que o workspace está sempre no fundo
+        const workspace = getWorkspace();
+        if (workspace) {
+          workspace.sendToBack();
+        }
+      });
+    } catch (error) {
+      console.error("Error loading JSON:", error);
+    }
   };
 
   const getWorkspace = () => {
@@ -152,16 +159,27 @@ const buildEditor = ({
     canvas.setActiveObject(object);
   };
 
+  // Adicionada função changeSize que estava faltando no objeto retornado
+  const changeSize = (value: { width: number; height: number }) => {
+    const workspace = getWorkspace();
+
+    workspace?.set(value);
+    autoZoom();
+    save();
+  };
+
   return {
     savePng,
     saveJpg,
     saveSvg,
     saveJson,
     loadJson,
+    loadFromJSON, // Adicionada esta função
     canUndo,
     canRedo,
     autoZoom,
     getWorkspace,
+    changeSize, // Adicionada esta função
     zoomIn: () => {
       let zoomRatio = canvas.getZoom();
       zoomRatio += 0.05;
@@ -180,13 +198,13 @@ const buildEditor = ({
         zoomRatio < 0.2 ? 0.2 : zoomRatio,
       );
     },
-    changeSize: (value: { width: number; height: number }) => {
+    zoomToFit: () => autoZoom(), // Adicionada esta função
+    centerWorkspace: () => {
       const workspace = getWorkspace();
-
-      workspace?.set(value);
-      autoZoom();
-      save();
-    },
+      if (workspace) {
+        canvas.centerObject(workspace);
+      }
+    }, // Adicionada esta função
     changeBackground: (value: string) => {
       const workspace = getWorkspace();
       workspace?.set({ fill: value });
@@ -238,6 +256,11 @@ const buildEditor = ({
       );
     },
     delete: () => {
+      canvas.getActiveObjects().forEach((object) => canvas.remove(object));
+      canvas.discardActiveObject();
+      canvas.renderAll();
+    },
+    deleteSelected: () => { // Alias para delete
       canvas.getActiveObjects().forEach((object) => canvas.remove(object));
       canvas.discardActiveObject();
       canvas.renderAll();
@@ -547,6 +570,52 @@ const buildEditor = ({
       );
       addToCanvas(object);
     },
+    // Funções de adicionar formas (aliases)
+    addShape: (shape: string, options?: any) => {
+      switch (shape) {
+        case "rectangle":
+          const rectObject = new fabric.Rect({
+            ...RECTANGLE_OPTIONS,
+            fill: fillColor,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            strokeDashArray: strokeDashArray,
+            ...options,
+          });
+          addToCanvas(rectObject);
+          break;
+        case "circle":
+          const circleObject = new fabric.Circle({
+            ...CIRCLE_OPTIONS,
+            fill: fillColor,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            strokeDashArray: strokeDashArray,
+            ...options,
+          });
+          addToCanvas(circleObject);
+          break;
+        case "triangle":
+          const triangleObject = new fabric.Triangle({
+            ...TRIANGLE_OPTIONS,
+            fill: fillColor,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            strokeDashArray: strokeDashArray,
+            ...options,
+          });
+          addToCanvas(triangleObject);
+          break;
+      }
+    },
+    // Funções de undo/redo (aliases)
+    undo: () => undo(),
+    redo: () => redo(),
+    // Funções de copy/paste (aliases)
+    copy: () => copy(),
+    paste: () => paste(),
+    // Função saveState para compatibilidade
+    saveState: () => save(),
     canvas,
     getActiveFontWeight: () => {
       const selectedObject = selectedObjects[0];
@@ -631,6 +700,14 @@ export const useEditor = ({
   saveCallback,
 }: EditorHookProps) => {
   const initialState = useRef(defaultState);
+
+  // 👉 Sincroniza estado inicial sempre que mudar de página
+useEffect(() => {
+  if (initialState.current !== defaultState) {
+    initialState.current = defaultState;
+  }
+}, [defaultState]);
+
   const initialWidth = useRef(defaultWidth);
   const initialHeight = useRef(defaultHeight);
 
@@ -682,6 +759,7 @@ export const useEditor = ({
     canvas,
   });
 
+  // Comentar temporariamente o useLoadState para testar
   useLoadState({
     canvas,
     autoZoom,
@@ -691,7 +769,10 @@ export const useEditor = ({
   });
 
   const editor = useMemo(() => {
+    console.log("🔄 Editor useMemo triggered", { canvas: !!canvas });
+    
     if (canvas) {
+      console.log("✅ Creating editor instance");
       return buildEditor({
         save,
         undo,
@@ -716,6 +797,7 @@ export const useEditor = ({
       });
     }
 
+    console.log("❌ Canvas not ready, editor undefined");
     return undefined;
   }, 
   [
@@ -744,6 +826,8 @@ export const useEditor = ({
       initialCanvas: fabric.Canvas;
       initialContainer: HTMLDivElement;
     }) => {
+      console.log("🚀 Initializing editor...", { initialCanvas, initialContainer });
+
       fabric.Object.prototype.set({
         cornerColor: "#FFF",
         cornerStyle: "circle",
@@ -767,6 +851,11 @@ export const useEditor = ({
         }),
       });
 
+      console.log("📐 Creating workspace:", { 
+        width: initialWidth.current, 
+        height: initialHeight.current 
+      });
+
       initialCanvas.setWidth(initialContainer.offsetWidth);
       initialCanvas.setHeight(initialContainer.offsetHeight);
 
@@ -774,6 +863,7 @@ export const useEditor = ({
       initialCanvas.centerObject(initialWorkspace);
       initialCanvas.clipPath = initialWorkspace;
 
+      console.log("🎨 Setting canvas and container state");
       setCanvas(initialCanvas);
       setContainer(initialContainer);
 
@@ -782,11 +872,10 @@ export const useEditor = ({
       );
       canvasHistory.current = [currentState];
       setHistoryIndex(0);
+
+      console.log("✅ Editor initialization complete");
     },
-    [
-      canvasHistory, // No need, this is from useRef
-      setHistoryIndex, // No need, this is from useState
-    ]
+    [setHistoryIndex] // Manter apenas as dependências essenciais
   );
 
   return { init, editor };

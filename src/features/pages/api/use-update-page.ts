@@ -9,14 +9,18 @@ import { client } from "@/lib/hono";
 type ResponseType = InferResponseType<typeof client.api.projects[":projectId"]["pages"][":pageId"]["$patch"], 200>;
 type RequestType = InferRequestType<typeof client.api.projects[":projectId"]["pages"][":pageId"]["$patch"]>["json"];
 
-export const useUpdatePage = (projectId: string, pageId: string) => {
+export const useUpdatePage = (projectId: string) => {
   const queryClient = useQueryClient();
 
-  const mutation = useMutation<ResponseType, Error, RequestType>({
-    mutationFn: async (json) => {
+  const mutation = useMutation<
+    ResponseType,
+    Error,
+    { pageId: string; data: RequestType }
+  >({
+    mutationFn: async ({ pageId, data }) => {
       const response = await client.api.projects[":projectId"]["pages"][":pageId"].$patch({
         param: { projectId, pageId },
-        json,
+        json: data,
       });
 
       if (!response.ok) {
@@ -25,7 +29,7 @@ export const useUpdatePage = (projectId: string, pageId: string) => {
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { pageId }) => {
       queryClient.invalidateQueries({ queryKey: ["page", projectId, pageId] });
       queryClient.invalidateQueries({ queryKey: ["pages", projectId] });
     },

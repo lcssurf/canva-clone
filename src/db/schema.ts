@@ -126,7 +126,7 @@ export const pages = pgTable("page", {
   title: text("title"),               // opcional, ex: “Página 1”
   width: integer("width").notNull(),   // herda as dimensões do projeto, ou torne opcional
   height: integer("height").notNull(),
-  fabricState: jsonb("fabricState").notNull(),  // aqui fica o canvas.toJSON()
+  fabricState: text("fabricState").notNull(),  // aqui fica o canvas.toJSON()
   thumbnailUrl: text("thumbnailUrl"),           // p/ preview rápido
   createdAt: timestamp("createdAt", { mode: "date" }).notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull(),

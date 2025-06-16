@@ -9,294 +9,256 @@ import { pages, projects, projectsInsertSchema } from "@/db/schema";
 
 const app = new Hono()
 
-// ##### ROTAS PAGES ##### -------------------------------------------------------
+  // ##### ROTAS PAGES ##### -------------------------------------------------------
 
-// Listar páginas de um projeto
-.get(
-  "/:projectId/pages",
-  verifyAuth(),
-  zValidator("param", z.object({ projectId: z.string() })),
-  async (c) => {
-    const auth = c.get("authUser");
-    const { projectId } = c.req.valid("param");
+  // Listar páginas de um projeto
+  .get(
+    "/:projectId/pages",
+    verifyAuth(),
+    zValidator("param", z.object({ projectId: z.string() })),
+    async (c) => {
+      const auth = c.get("authUser");
+      const { projectId } = c.req.valid("param");
 
-    if (!auth.token?.id) {
-      return c.json({ error: "Unauthorized" }, 401);
+      if (!auth.token?.id) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+
+      // Verificar se o projeto pertence ao usuário
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(
+          and(eq(projects.id, projectId), eq(projects.userId, auth.token.id))
+        );
+
+      if (!project) {
+        return c.json({ error: "Project not found or unauthorized" }, 404);
+      }
+
+      const data = await db
+        .select()
+        .from(pages)
+        .where(eq(pages.projectId, projectId))
+        .orderBy(asc(pages.createdAt));
+
+      return c.json({ data });
     }
+  )
 
-    // Verificar se o projeto pertence ao usuário
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          eq(projects.id, projectId),
-          eq(projects.userId, auth.token.id)
-        )
-      );
-
-    if (!project) {
-      return c.json({ error: "Project not found or unauthorized" }, 404);
-    }
-
-    const data = await db
-      .select({
-        id: pages.id,
-        title: pages.title,
-        order: pages.order,
-        width: pages.width,
-        height: pages.height,
-        thumbnailUrl: pages.thumbnailUrl,
-        createdAt: pages.createdAt,
-        updatedAt: pages.updatedAt,
+  // Criar uma nova página em um projeto
+  .post(
+    "/:projectId/pages",
+    verifyAuth(),
+    zValidator("param", z.object({ projectId: z.string() })),
+    zValidator(
+      "json",
+      z.object({
+        title: z.string().optional(),
+        width: z.number().min(1),
+        height: z.number().min(1),
       })
-      .from(pages)
-      .where(eq(pages.projectId, projectId))
-      .orderBy(asc(pages.order));
+    ),
+    async (c) => {
+      const auth = c.get("authUser");
+      const { projectId } = c.req.valid("param");
+      const { title, width, height } = c.req.valid("json");
 
-    return c.json({ data });
-  }
-)
+      if (!auth.token?.id) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
 
-// Criar uma nova página em um projeto
-.post(
-  "/:projectId/pages",
-  verifyAuth(),
-  zValidator("param", z.object({ projectId: z.string() })),
-  zValidator(
-    "json",
-    z.object({
-      title: z.string().optional(),
-      width: z.number().min(1),
-      height: z.number().min(1),
-    })
-  ),
-  async (c) => {
-    const auth = c.get("authUser");
-    const { projectId } = c.req.valid("param");
-    const { title, width, height } = c.req.valid("json");
+      // Verificar se o projeto pertence ao usuário
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(
+          and(eq(projects.id, projectId), eq(projects.userId, auth.token.id))
+        );
 
-    if (!auth.token?.id) {
-      return c.json({ error: "Unauthorized" }, 401);
+      if (!project) {
+        return c.json({ error: "Project not found or unauthorized" }, 404);
+      }
+
+      // Buscar o maior order existente
+      const [{ maxOrder }] = await db
+        .select({ maxOrder: sql<number>`MAX(${pages.order})` })
+        .from(pages)
+        .where(eq(pages.projectId, projectId));
+      const nextOrder = (maxOrder ?? -1) + 1;
+
+      // Inserir a nova página
+      const [newPage] = await db
+        .insert(pages)
+        .values({
+          projectId,
+          order: nextOrder,
+          title: title ?? `Page ${nextOrder + 1}`,
+          width,
+          height,
+          fabricState: "",//{ version: "5.3.0", objects: [] },
+          thumbnailUrl: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      return c.json({ data: newPage }, 201);
     }
+  )
 
-    // Verificar se o projeto pertence ao usuário
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          eq(projects.id, projectId),
-          eq(projects.userId, auth.token.id)
-        )
-      );
+  // Obter dados completos de uma página específica
+  .get(
+    "/:projectId/pages/:pageId",
+    verifyAuth(),
+    zValidator(
+      "param",
+      z.object({ projectId: z.string(), pageId: z.string() })
+    ),
+    async (c) => {
+      const auth = c.get("authUser");
+      const { projectId, pageId } = c.req.valid("param");
 
-    if (!project) {
-      return c.json({ error: "Project not found or unauthorized" }, 404);
+      if (!auth.token?.id) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+
+      // Verificar se o projeto pertence ao usuário
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(
+          and(eq(projects.id, projectId), eq(projects.userId, auth.token.id))
+        );
+
+      if (!project) {
+        return c.json({ error: "Project not found or unauthorized" }, 404);
+      }
+
+      const [page] = await db
+        .select()
+        .from(pages)
+        .where(and(eq(pages.id, pageId), eq(pages.projectId, projectId)));
+
+      if (!page) {
+        return c.json({ error: "Page not found" }, 404);
+      }
+
+      return c.json({ data: page });
     }
+  )
 
-    // Buscar o maior order existente
-    const [{ maxOrder }] = await db
-      .select({ maxOrder: sql<number>`MAX(${pages.order})` })
-      .from(pages)
-      .where(eq(pages.projectId, projectId));
-    const nextOrder = (maxOrder ?? -1) + 1;
-
-    // Inserir a nova página
-    const [newPage] = await db
-      .insert(pages)
-      .values({
-        projectId,
-        order: nextOrder,
-        title: title ?? `Page ${nextOrder + 1}`,
-        width,
-        height,
-        fabricState: { version: "5.3.0", objects: [] },
-        thumbnailUrl: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+  // Atualizar uma página (fabricState, title, etc.)
+  .patch(
+    "/:projectId/pages/:pageId",
+    verifyAuth(),
+    zValidator(
+      "param",
+      z.object({ projectId: z.string(), pageId: z.string() })
+    ),
+    zValidator(
+      "json",
+      z.object({
+        fabricState: z.any().optional(),
+        title: z.string().optional(),
+        width: z.number().min(1).optional(),
+        height: z.number().min(1).optional(),
+        thumbnailUrl: z.string().optional(),
       })
-      .returning();
+    ),
+    async (c) => {
+      const auth = c.get("authUser");
+      const { projectId, pageId } = c.req.valid("param");
+      const values = c.req.valid("json");
 
-    return c.json({ data: newPage }, 201);
-  }
-)
+      if (!auth.token?.id) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
 
-// Obter dados completos de uma página específica
-.get(
-  "/:projectId/pages/:pageId",
-  verifyAuth(),
-  zValidator(
-    "param",
-    z.object({ projectId: z.string(), pageId: z.string() })
-  ),
-  async (c) => {
-    const auth = c.get("authUser");
-    const { projectId, pageId } = c.req.valid("param");
+      // Verificar se o projeto pertence ao usuário
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(
+          and(eq(projects.id, projectId), eq(projects.userId, auth.token.id))
+        );
 
-    if (!auth.token?.id) {
-      return c.json({ error: "Unauthorized" }, 401);
+      if (!project) {
+        return c.json({ error: "Project not found or unauthorized" }, 404);
+      }
+
+      // Atualizar a página
+      const [updatedPage] = await db
+        .update(pages)
+        .set({
+          ...values,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(pages.id, pageId), eq(pages.projectId, projectId)))
+        .returning();
+
+      if (!updatedPage) {
+        return c.json({ error: "Page not found" }, 404);
+      }
+
+      return c.json({ data: updatedPage } satisfies { data: typeof updatedPage });
+
     }
+  )
 
-    // Verificar se o projeto pertence ao usuário
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          eq(projects.id, projectId),
-          eq(projects.userId, auth.token.id)
-        )
-      );
+  // Deletar uma página
+  .delete(
+    "/:projectId/pages/:pageId",
+    verifyAuth(),
+    zValidator(
+      "param",
+      z.object({ projectId: z.string(), pageId: z.string() })
+    ),
+    async (c) => {
+      const auth = c.get("authUser");
+      const { projectId, pageId } = c.req.valid("param");
 
-    if (!project) {
-      return c.json({ error: "Project not found or unauthorized" }, 404);
+      if (!auth.token?.id) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+
+      // Verificar se o projeto pertence ao usuário
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(
+          and(eq(projects.id, projectId), eq(projects.userId, auth.token.id))
+        );
+
+      if (!project) {
+        return c.json({ error: "Project not found or unauthorized" }, 404);
+      }
+
+      // Verificar se não é a última página
+      const pagesCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(pages)
+        .where(eq(pages.projectId, projectId));
+
+      if (pagesCount[0].count <= 1) {
+        return c.json({ error: "Cannot delete the last page" }, 400);
+      }
+
+      // Deletar a página
+      const [deletedPage] = await db
+        .delete(pages)
+        .where(and(eq(pages.id, pageId), eq(pages.projectId, projectId)))
+        .returning();
+
+      if (!deletedPage) {
+        return c.json({ error: "Page not found" }, 404);
+      }
+
+      return c.json({ data: { id: pageId } });
     }
+  )
 
-    const [page] = await db
-      .select()
-      .from(pages)
-      .where(
-        and(
-          eq(pages.id, pageId),
-          eq(pages.projectId, projectId)
-        )
-      );
-
-    if (!page) {
-      return c.json({ error: "Page not found" }, 404);
-    }
-
-    return c.json({ data: page });
-  }
-)
-
-// Atualizar uma página (fabricState, title, etc.)
-.patch(
-  "/:projectId/pages/:pageId",
-  verifyAuth(),
-  zValidator(
-    "param",
-    z.object({ projectId: z.string(), pageId: z.string() })
-  ),
-  zValidator(
-    "json",
-    z.object({
-      fabricState: z.any().optional(),
-      title: z.string().optional(),
-      width: z.number().min(1).optional(),
-      height: z.number().min(1).optional(),
-      thumbnailUrl: z.string().optional(),
-    })
-  ),
-  async (c) => {
-    const auth = c.get("authUser");
-    const { projectId, pageId } = c.req.valid("param");
-    const values = c.req.valid("json");
-
-    if (!auth.token?.id) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-
-    // Verificar se o projeto pertence ao usuário
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          eq(projects.id, projectId),
-          eq(projects.userId, auth.token.id)
-        )
-      );
-
-    if (!project) {
-      return c.json({ error: "Project not found or unauthorized" }, 404);
-    }
-
-    // Atualizar a página
-    const [updatedPage] = await db
-      .update(pages)
-      .set({
-        ...values,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(pages.id, pageId),
-          eq(pages.projectId, projectId)
-        )
-      )
-      .returning();
-
-    if (!updatedPage) {
-      return c.json({ error: "Page not found" }, 404);
-    }
-
-    return c.json({ data: updatedPage });
-  }
-)
-
-// Deletar uma página
-.delete(
-  "/:projectId/pages/:pageId",
-  verifyAuth(),
-  zValidator(
-    "param",
-    z.object({ projectId: z.string(), pageId: z.string() })
-  ),
-  async (c) => {
-    const auth = c.get("authUser");
-    const { projectId, pageId } = c.req.valid("param");
-
-    if (!auth.token?.id) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-
-    // Verificar se o projeto pertence ao usuário
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(
-        and(
-          eq(projects.id, projectId),
-          eq(projects.userId, auth.token.id)
-        )
-      );
-
-    if (!project) {
-      return c.json({ error: "Project not found or unauthorized" }, 404);
-    }
-
-    // Verificar se não é a última página
-    const pagesCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(pages)
-      .where(eq(pages.projectId, projectId));
-
-    if (pagesCount[0].count <= 1) {
-      return c.json({ error: "Cannot delete the last page" }, 400);
-    }
-
-    // Deletar a página
-    const [deletedPage] = await db
-      .delete(pages)
-      .where(
-        and(
-          eq(pages.id, pageId),
-          eq(pages.projectId, projectId)
-        )
-      )
-      .returning();
-
-    if (!deletedPage) {
-      return c.json({ error: "Page not found" }, 404);
-    }
-
-    return c.json({ data: { id: pageId } });
-  }
-)
-
-// ##### ROTAS PROJECT ##### -------------------------------------------------------
+  // ##### ROTAS PROJECT ##### -------------------------------------------------------
   .get(
     "/templates",
     verifyAuth(),
@@ -528,14 +490,30 @@ const app = new Hono()
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      const data = await db
+      // Busca o projeto
+      const [project] = await db
         .select()
         .from(projects)
         .where(and(eq(projects.id, id), eq(projects.userId, auth.token.id)));
 
+      if (!project) {
+        return c.json({ error: "Not found" }, 404);
+      }
+
+      // Busca todas as páginas do projeto
+      const projectPages = await db
+        .select()
+        .from(pages)
+        .where(eq(pages.projectId, id))
+        .orderBy(asc(pages.order));
+
+      const data = [{ ...project, pages: projectPages }];
+
       if (data.length === 0) {
         return c.json({ error: "Not found" }, 404);
       }
+
+      console.log("Project data:", data[0]);
 
       return c.json({ data: data[0] });
     }
@@ -584,6 +562,32 @@ const app = new Hono()
       }
 
       // 2) Cria a página inicial (order = 0)
+      const defaultState = {
+        version: "5.3.0",
+        objects: [],
+        clipPath: {
+          type: "rect",
+          version: "5.3.0",
+          originX: "left",
+          originY: "top",
+          left: 0,
+          top: 0,
+          width, // vem do seu parâmetro
+          height, // vem do seu parâmetro
+          fill: "white",
+          selectable: false,
+          hasControls: false,
+          shadow: {
+            color: "rgba(0,0,0,0.8)",
+            blur: 5,
+            offsetX: 0,
+            offsetY: 0,
+            affectStroke: false,
+            nonScaling: false,
+          },
+        },
+      };
+
       const [firstPage] = await db
         .insert(pages)
         .values({
@@ -592,7 +596,8 @@ const app = new Hono()
           title: "Página 1",
           width,
           height,
-          fabricState: { version: "5.3.0", objects: [] },
+          // Se sua coluna é TEXT ou JSON, stringify; se for JSONB, basta o objeto
+          fabricState: "",
           thumbnailUrl: null,
           createdAt: new Date(),
           updatedAt: new Date(),

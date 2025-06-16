@@ -1,0 +1,1 @@
+ALTER TABLE "page" ALTER COLUMN "fabricState" SET DATA TYPE text;
