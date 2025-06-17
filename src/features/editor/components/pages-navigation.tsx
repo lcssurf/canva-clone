@@ -37,9 +37,11 @@ interface PagesNavigationProps {
   setActivePageId: (id: string) => void;
   createPage: () => void;
   projectId: string;
+  pending?: boolean;
 }
 
 export const PagesNavigation = ({
+  pending = false,
   pages,
   activePageId,
   setActivePageId,
@@ -171,8 +173,9 @@ export const PagesNavigation = ({
               size="sm"
               variant="ghost"
               className="h-8 w-8 p-0 shrink-0 border border-dashed border-gray-300 hover:border-gray-400"
+              disabled={pending}
             >
-              <Plus className="h-4 w-4" />
+              {!pending ? <Plus className="h-4 w-4" /> : <Loader className="h-4 w-4 animate-spin" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>Add Page</TooltipContent>

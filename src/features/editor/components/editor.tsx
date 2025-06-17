@@ -53,11 +53,23 @@ export const Editor = ({ initialData }: EditorProps) => {
 
 
 
-  const { mutate: createPage } = useCreatePage(initialData.id);
+  const { mutate: createPage, isPending: pendingCreatePage } = useCreatePage(initialData.id);
   const [activePageId, setActivePageId] = useState<string>(initialData.pages[0].id);
 
   const [pageData, setPageData] = useState(initialData.pages[0])
 
+  const handleCreatePage = async () => {
+    createPage({ height: initialData.height, width: initialData.width }, {
+      onSuccess: async (data: any) => {
+        await refetchPages();
+        console.log("Page created successfully", data);
+        
+        if (data?.data?.id) {
+          setActivePageId(data.data?.id);
+        } 
+      }
+    });
+  };
 
   const {
     data: pages = [],
@@ -103,7 +115,7 @@ export const Editor = ({ initialData }: EditorProps) => {
     ), [updatePage, activePageId]);
 
 
-  const [activeTool, setActiveTool] = useState<ActiveTool>("select");
+  const [activeTool, setActiveTool] = useState<ActiveTool>("ai");
 
   const onClearSelection = useCallback(() => {
     if (selectionDependentTools.includes(activeTool)) {
@@ -187,8 +199,9 @@ export const Editor = ({ initialData }: EditorProps) => {
 
 
       <PagesNavigation
+      pending = {pendingCreatePage}
         projectId={initialData.id}
-        createPage={() => createPage({ height: initialData.height, width: initialData.width })}
+        createPage={() => handleCreatePage()}
         activePageId={String(activePageId)}
         setActivePageId={setActivePageId}
         pages={pages}

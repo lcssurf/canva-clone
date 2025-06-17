@@ -7,28 +7,35 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToolSidebarClose } from '@/features/editor/components/tool-sidebar-close';
 import { ToolSidebarHeader } from '@/features/editor/components/tool-sidebar-header';
-import { 
-  ChevronDown, 
-  ChevronRight, 
-  Instagram, 
-  Target, 
-  Users, 
-  MessageSquare, 
+import {
+  ChevronDown,
+  ChevronRight,
+  Instagram,
+  Target,
+  Users,
+  MessageSquare,
   FileText,
   Loader2,
   Check,
   Copy,
   RefreshCw,
   RotateCcw,
-  Image,
+  // Image,
   Video,
   Grid3X3,
   X
 } from 'lucide-react';
-import { 
+import {
   ActiveTool
 } from "@/features/editor/types";
 import { cn } from "@/lib/utils";
+
+import { toast } from 'sonner';
+import { crawlUser } from '@/content/crawler';
+import Image from 'next/image';
+import {  useTranscription, useTranscriptionWithToasts } from '@/hooks/useTranscription';
+import { transcribePosts } from '@/lib/transcription';
+import { useEffect } from "react";
 
 // --- Tipos Aprimorados ---
 
@@ -44,6 +51,7 @@ interface InstagramPost {
   url: string;
   images: string[];
   reel?: boolean;
+  carousel?: boolean;
   videoURL?: string;
   transcription?: string;
   likes?: number;
@@ -57,6 +65,7 @@ interface Profile {
   profile_url?: string;
   posts_count?: number;
   biography?: string;
+  private?: boolean;
 }
 
 interface BlogData {
@@ -65,19 +74,19 @@ interface BlogData {
 }
 
 // União Discriminada para Fontes de Dados (mais seguro que `data: any`)
-type SourceData = 
+type SourceData =
   | {
-      id: string;
-      type: 'instagram';
-      data: Profile;
-      posts?: InstagramPost[];
-    }
+    id: string;
+    type: 'instagram';
+    data: Profile;
+    posts?: InstagramPost[];
+  }
   | {
-      id: string;
-      type: 'blog';
-      data: BlogData;
-      articles?: BlogArticle[];
-    };
+    id: string;
+    type: 'blog';
+    data: BlogData;
+    articles?: BlogArticle[];
+  };
 
 
 // Props do Componente Principal
@@ -124,13 +133,15 @@ type SectionName = typeof STEPS[number];
 
 // Sources Manager Component
 const SourcesManager: React.FC<{
+  setErrorText?: (text: string | null) => void;
+  errorText?: string | null;
   sources: SourceData[];
   onAddInstagram: (username: string) => void;
   onAddBlog: (url: string) => void;
   onRemove: (sourceId: string) => void;
   loading: boolean;
   maxSources: number;
-}> = ({ sources, onAddInstagram, onAddBlog, onRemove, loading, maxSources }) => {
+}> = ({ sources, onAddInstagram, onAddBlog, onRemove, loading, maxSources, errorText, setErrorText }) => {
   const [activeTab, setActiveTab] = useState<'instagram' | 'blog'>('instagram');
   const [instagramUsername, setInstagramUsername] = useState('');
   const [blogUrl, setBlogUrl] = useState('');
@@ -165,13 +176,13 @@ const SourcesManager: React.FC<{
                 )}
                 <div>
                   <p className="text-sm font-medium">
-                    {source.type === 'instagram' 
-                      ? `@${source.data.username}` 
+                    {source.type === 'instagram'
+                      ? `@${source.data.username}`
                       : source.data.domain
                     }
                   </p>
                   <p className="text-xs text-gray-500">
-                    {source.type === 'instagram' 
+                    {source.type === 'instagram'
                       ? `${source.posts?.length || 0} posts`
                       : `${source.articles?.length || 0} artigos`
                     }
@@ -218,11 +229,15 @@ const SourcesManager: React.FC<{
           {activeTab === 'instagram' && (
             <div className="space-y-3">
               <Input
+                onChangeCapture={() => setErrorText && setErrorText("")}
                 placeholder="@perfil_instagram"
                 value={instagramUsername}
                 onChange={(e) => setInstagramUsername(e.target.value)}
                 disabled={loading}
               />
+              {errorText && (
+                <p className="text-xs text-red-600">{errorText}</p>
+              )}
               <Button
                 className="w-full"
                 onClick={handleAddInstagram}
@@ -237,11 +252,15 @@ const SourcesManager: React.FC<{
           {activeTab === 'blog' && (
             <div className="space-y-3">
               <Input
+                onChangeCapture={() => setErrorText && setErrorText(null)}
                 placeholder="https://blog.exemplo.com"
                 value={blogUrl}
                 onChange={(e) => setBlogUrl(e.target.value)}
                 disabled={loading}
               />
+              {errorText && (
+                <p className="text-xs text-red-600">{errorText}</p>
+              )}
               <Button
                 className="w-full"
                 onClick={handleAddBlog}
@@ -265,18 +284,18 @@ const SourcesManager: React.FC<{
 };
 
 // Tipo `ContentItem` reutilizando tipos existentes
-type ContentItem = 
+type ContentItem =
   | (InstagramPost & { sourceId: string; type: 'post'; title: string; })
   | (BlogArticle & { sourceId: string; type: 'article'; });
 
 // Content Selector Component
 const ContentSelector: React.FC<{
   sources: SourceData[];
-  selectedPosts: string[];
-  onSelectionChange: (posts: string[]) => void;
+  selectedPosts: ContentItem[];
+  onSelectionChange: (posts: ContentItem[]) => void;
   onContinue: () => void;
 }> = ({ sources, selectedPosts, onSelectionChange, onContinue }) => {
-  
+
   const allContent: ContentItem[] = sources.flatMap(source => {
     if (source.type === 'instagram') {
       return (source.posts ?? []).map(post => ({
@@ -284,66 +303,94 @@ const ContentSelector: React.FC<{
         sourceId: source.id,
         type: 'post' as const,
         title: post.transcription?.substring(0, 80) || 'Post do Instagram',
-      }));
+      })) as ContentItem[];
     } else {
       return (source.articles ?? []).map(article => ({
         ...article,
         sourceId: source.id,
         type: 'article' as const,
-      }));
+      })) as ContentItem[];
     }
   });
 
-  const toggleSelection = (url: string) => {
-    const newSelection = selectedPosts.includes(url)
-      ? selectedPosts.filter(p => p !== url)
-      : selectedPosts.length < 6 
-        ? [...selectedPosts, url]
-        : selectedPosts;
+  const toggleSelection = (content: ContentItem) => {
+    const url = content.url;
+    const isSelected = selectedPosts.some((p: any) => p.url === url);
+    let newSelection;
+    if (isSelected) {
+      newSelection = selectedPosts.filter((p: any) => p.url !== url);
+    } else if (selectedPosts.length < 3) {
+      newSelection = [...selectedPosts, content];
+    } else {
+      newSelection = selectedPosts;
+    }
     onSelectionChange(newSelection);
   };
+
+  // console.log("🔄 Conteúdos disponíveis:", allContent);
+
+  // console.log("🔄 Sources:", sources);
+
+
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Selecione até 6 conteúdos para usar como referência ({selectedPosts.length}/6)
+        Selecione até 3 conteúdos para usar como referência ({selectedPosts.length}/3)
       </p>
 
       <ScrollArea className="h-80 pr-4">
         <div className="grid grid-cols-1 gap-3">
           {allContent.map((content) => {
-            const isSelected = selectedPosts.includes(content.url);
+            const isSelected = selectedPosts.some(post => post.url === content.url);
             const sourceData = sources.find(s => s.id === content.sourceId);
-            
+            // console.log(content);
+
+
             return (
               <div
                 key={content.url}
-                onClick={() => toggleSelection(content.url)}
+                onClick={() => toggleSelection(content)}
                 className={cn(
                   "border rounded-lg p-3 cursor-pointer transition-all hover:shadow-md",
-                  isSelected 
-                    ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50" 
+                  isSelected
+                    ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50"
                     : "border-gray-200 hover:border-gray-300"
                 )}
               >
                 <div className="flex items-start gap-3">
+                  {/* <p>{JSON.stringify(content.images[0])}</p> */}
                   {content.type === 'post' && content.images?.length > 0 && (
-                    <img
+                    <Image
+                      crossOrigin="anonymous"
                       src={content.images[0] || "/placeholder.svg"}
                       alt="Post"
+                      width={48}
+                      height={48}
                       className="w-12 h-12 object-cover rounded"
                     />
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       {content.type === 'post' ? (
+                        <p className='flex items-center gap-1 text-xs text-gray-500 truncate'>
                         <Instagram className="w-4 h-4 text-pink-600" />
+                        {content.reel && (
+                          <span className="text-xs text-gray-500 truncate">
+                          <Video className="inline w-4 h-4 mr-1 text-pink-600" />
+                        </span>)}
+                        { content.carousel && (
+                          <span className="text-xs text-gray-500 truncate">
+                            <Grid3X3 className="inline w-4 h-4 mr-1 text-pink-600" />
+                            </span>
+                            )}
+                        </p>
                       ) : (
                         <FileText className="w-4 h-4 text-blue-600" />
                       )}
                       <p className="text-xs text-gray-500 truncate">
-                        {sourceData?.type === 'instagram' 
-                          ? `@${sourceData.data.username}` 
+                        {sourceData?.type === 'instagram'
+                          ? `@${sourceData.data.username}`
                           : sourceData?.data.domain || 'Blog'}
                       </p>
                     </div>
@@ -365,7 +412,7 @@ const ContentSelector: React.FC<{
           })}
         </div>
       </ScrollArea>
-      
+
       <Button
         className="w-full"
         onClick={onContinue}
@@ -395,7 +442,7 @@ const ExpandableSection: React.FC<{
       autoFocus && !completed && "ring-2 ring-blue-500 shadow-lg",
       completed && "bg-green-50 border-green-200"
     )}>
-      <CardHeader 
+      <CardHeader
         className="cursor-pointer hover:bg-gray-50 transition-colors p-4"
         onClick={onToggle}
       >
@@ -423,7 +470,7 @@ const ExpandableSection: React.FC<{
           </div>
         </div>
       </CardHeader>
-      
+
       {expanded && (
         <CardContent className="pt-0 p-4">
           {children}
@@ -446,9 +493,11 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   const [loading, setLoading] = useState<Partial<Record<SectionName, boolean>>>({});
   const [completed, setCompleted] = useState<Partial<Record<SectionName, boolean>>>({});
 
+  const [errorText, setErrorText] = useState<string | null>(null);
+
   // Form state com tipos literais
   const [sources, setSources] = useState<SourceData[]>([]);
-  const [selectedPosts, setSelectedPosts] = useState<string[]>([]);
+  const [selectedPosts, setSelectedPosts] = useState<ContentItem[]>([]);
   const [goal, setGoal] = useState<GoalValue | ''>('');
   const [niche, setNiche] = useState('');
   const [audience, setAudience] = useState('');
@@ -460,6 +509,13 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   // Current focus tracking
   const [currentFocus, setCurrentFocus] = useState<SectionName>('sources');
+
+  // Hook deve ser chamado no nível do componente, não dentro de funções
+  const { processTranscriptions, isLoading } = useTranscriptionWithToasts(
+    selectedPosts, 
+    setSelectedPosts
+  );
+
 
   // Helper functions
   const toggleSection = (section: SectionName) => {
@@ -473,18 +529,39 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     setLoading(prev => ({ ...prev, [key]: value }));
   };
 
+  // const setCompletedState = (key: SectionName, value: boolean) => {
+  //   setCompleted(prev => ({ ...prev, [key]: value }));
+  //   if (value) {
+  //     const currentIndex = STEPS.indexOf(key);
+  //     if (currentIndex < STEPS.length - 1) {
+  //       const nextStep = STEPS[currentIndex + 1];
+  //       setCurrentFocus(nextStep);
+  //       // Abre a próxima seção automaticamente
+  //       setExpandedSections(prev => ({...prev, [key]: false, [nextStep]: true}));
+  //     }
+  //   }
+  // };
+
   const setCompletedState = (key: SectionName, value: boolean) => {
     setCompleted(prev => ({ ...prev, [key]: value }));
+
     if (value) {
       const currentIndex = STEPS.indexOf(key);
       if (currentIndex < STEPS.length - 1) {
         const nextStep = STEPS[currentIndex + 1];
+
         setCurrentFocus(nextStep);
-        // Abre a próxima seção automaticamente
-        setExpandedSections(prev => ({...prev, [key]: false, [nextStep]: true}));
+        setExpandedSections(prev => ({
+          ...prev,
+          // só “fecha” (seta false) a seção atual se NÃO for a de sources
+          ...(key !== 'sources' && { [key]: false }),
+          // e sempre abre a próxima
+          [nextStep]: true,
+        }));
       }
     }
   };
+
 
   const onClose = () => {
     onChangeActiveTool("select");
@@ -492,24 +569,81 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   // API calls
   const handleAddInstagramSource = async (username: string) => {
-    if (!username.trim() || sources.length >= 3) return;
-    
+
     setLoadingState('sources', true);
+
+
+    if (!username.trim() || sources.length >= 3) {
+      // Exibe erro usando sonner
+
+      toast.error('Usuário do Instagram inválido ou limite de fontes atingido.');
+
+      return;
+    }
+
+
+    let user = username.trim().replace('@', '');
+
+    const cacheKey = `profile_${user}`;
+
+    // try {
+    //   const cached = sessionStorage.getItem(cacheKey);
+    //   if (cached) {
+    //     const parsed = JSON.parse(cached);
+    //     const now = Date.now();
+    //     const cacheAge = now - (parsed._cachedAt || 0);
+
+    //     if (cacheAge < 24 * 60 * 60 * 1000) { // Cache válido por 24 horas 
+    //       setReferenceProfile(parsed.profile);
+    //       setReferencePosts(parsed.posts);
+    //       setReferenceUsername(sanitized);
+    //       nextIfValid("profile", () => { });
+    //       console.log("🔄 Cache encontrado e válido para:", sanitized);
+    //       setLoadingState('isLoadingProfile', false);
+    //       return;
+    //     } else {
+    //       console.log("🔄 Cache expirado para:", sanitized);
+    //     }
+    //   }
+    // } catch (e) {
+    //   console.warn("⚠️ Erro ao acessar cache:", e);
+    // }
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
+      const posts = await crawlUser(user);
+
+      if (posts.private) {
+        setErrorText('Usuário encontrado, mas é privado');
+        console.error('Usuário encontrado, mas é privado');
+        return;
+      }
+
+      if (!posts || !posts.posts) {
+        setErrorText('Não foi possível encontrar este usuário ou ele não possui posts públicos. Verifique o nome de usuário e tente novamente.');
+        console.error('Não foi possível encontrar este usuário ou ele não possui posts públicos. Verifique o nome de usuário e tente novamente.');
+        return;
+      }
+      // console.log(`🔄`, posts);
+
+
       const mockProfile: Profile = {
         username: username.replace('@', ''),
-        followers: Math.floor(Math.random() * 50000),
-        profile_image_link: '/placeholder.svg',
-        posts_count: Math.floor(Math.random() * 300)
+        followers: Number(posts.followersCount),
+        profile_image_link: posts.profilePicUrl,
+        posts_count: posts.posts.length,
+        private: posts.private,
       };
-      
-      const mockPosts: InstagramPost[] = Array.from({ length: 9 }, (_, i) => ({
-        url: `https://instagram.com/p/${i}-${username}`,
-        images: ['/placeholder.svg'],
-        reel: i % 4 === 0,
-        transcription: `Esta é uma descrição de exemplo para o post ${i + 1} do perfil @${mockProfile.username}. O objetivo é simular conteúdo real para análise da IA.`
+
+      const mockPosts: InstagramPost[] = (posts.posts || []).map((post: any, i: number) => ({
+        url: post.url || `https://instagram.com/p/${i}-${username}`,
+        images: Array.isArray(post.images) ? post.images : ['/placeholder.svg'],
+        reel: post.reel ?? (i % 4 === 0),
+        carousel: post.carousel ?? (i % 3 === 0),
+        videoURL: post.videoURL,
+        transcription: post.transcription || ``,
+        // likes: post.likes,
+        // datetime: post.datetime
       }));
 
       const newSource: SourceData = {
@@ -519,12 +653,17 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         posts: mockPosts
       };
 
+
       setSources(prev => [...prev, newSource]);
-      
+
+      // console.log(`🔄 Fonte Instagram adicionada:`, newSource);
+
+
       if (sources.length === 0) {
         setCompletedState('sources', true);
       }
     } catch (error) {
+      setErrorText('Erro ao buscar perfil do Instagram. Verifique o nome de usuário e tente novamente.');
       console.error('Error fetching Instagram profile:', error);
     } finally {
       setLoadingState('sources', false);
@@ -533,11 +672,11 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   const handleAddBlogSource = async (url: string) => {
     if (!url.trim() || sources.length >= 3) return;
-    
+
     setLoadingState('sources', true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
       const mockArticles: BlogArticle[] = Array.from({ length: 5 }, (_, i) => ({
         url: `${url}/article-${i}`,
         title: `Artigo de Exemplo ${i + 1}`,
@@ -553,7 +692,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       };
 
       setSources(prev => [...prev, newSource]);
-      
+
       if (sources.length === 0) {
         setCompletedState('sources', true);
       }
@@ -566,17 +705,37 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   const removeSource = (sourceId: string) => {
     setSources(prev => prev.filter(s => s.id !== sourceId));
-    setSelectedPosts(prev => prev.filter(postUrl => !postUrl.includes(sourceId)));
+    setSelectedPosts(prev => prev.filter(post => post.sourceId !== sourceId));
     if (sources.length === 1) {
-        setCompletedState('sources', false);
+      setCompletedState('sources', false);
     }
   };
 
-  const handlePostsSelection = () => {
-    if (selectedPosts.length > 0) {
-      setCompletedState('posts', true);
+  useEffect(() => {
+    console.log("📝 Posts selecionados:", selectedPosts);
+  }, [selectedPosts]);
+  
+const handlePostsSelection = async () => {
+    if (selectedPosts.length === 0) {
+      console.warn("Nenhum post selecionado.");
+      return;
+    }
+
+    console.log("🔄 Posts selecionados:", selectedPosts);
+
+    // Marcar como concluído primeiro (abordagem paralela)
+    setCompletedState('posts', true);
+
+    // Processar transcrições em background
+    try {
+      await processTranscriptions(3); // batchSize = 3
+    } catch (error) {
+      console.error("Erro durante processamento:", error);
+    } finally {
+      console.log("🔄 Posts atualizados: ", selectedPosts);
     }
   };
+
 
   const handleGoalSelection = (selectedGoal: GoalValue) => {
     setGoal(selectedGoal);
@@ -603,8 +762,8 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   const handleToneSelection = (selectedTone: ToneValue) => {
     const newTones = tone.includes(selectedTone)
-        ? tone.filter(t => t !== selectedTone)
-        : [...tone, selectedTone];
+      ? tone.filter(t => t !== selectedTone)
+      : [...tone, selectedTone];
     setTone(newTones);
   };
 
@@ -618,12 +777,12 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     setFormat(selectedFormat);
     setCompletedState('format', true);
     setExpandedSections(prev => ({ ...prev, format: false }));
-    
+
     setGenerating(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 3000));
       const toneLabels = TONES.filter(t => tone.includes(t.value)).map(t => t.label.toLowerCase());
-      
+
       const content = `🎯 Seu conteúdo sobre "${subject}"
 
 ✨ Criado especialmente para seu público: ${audience}
@@ -631,7 +790,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 🔥 Com um tom ${toneLabels.join(' e ')}.
 
 #${niche.replace(/\s/g, '')} #conteudo #marketingdigital`;
-      
+
       setGeneratedContent(content);
     } catch (error) {
       console.error('Error generating content:', error);
@@ -664,7 +823,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     setGenerating(false);
     setCurrentFocus('sources');
   };
-  
+
   // Condições de "pronto para gerar"
   const canGenerate = goal && niche && audience && subject && tone.length > 0 && selectedPosts.length > 0;
 
@@ -696,75 +855,86 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         title="Gerador de Conteúdo AI"
         description="Crie posts personalizados baseados em análise"
       />
-      
+
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* ... (O JSX dos ExpandableSection permanece o mesmo, mas agora está mais seguro devido às novas tipagens) ... */}
-           {/* Generated Content */}
+          {/* Generated Content */}
           {generatedContent && !generating ? (
-             <Card>
-               <CardHeader>
-                 <div className="flex items-center justify-between">
-                   <CardTitle className="text-base">Conteúdo Gerado</CardTitle>
-                   <div className="flex gap-2">
-                     <Button variant="outline" size="sm" onClick={handleCopy}>
-                       {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                     </Button>
-                     <Button variant="outline" size="sm" onClick={() => handleFormatAndGenerate(format)} disabled={generating || !format}>
-                       <RefreshCw className="w-4 h-4" />
-                     </Button>
-                     <Button variant="outline" size="sm" onClick={reset}>
-                       <RotateCcw className="w-4 h-4" />
-                     </Button>
-                   </div>
-                 </div>
-               </CardHeader>
-               <CardContent>
-                 <div className="p-3 bg-gray-50 rounded-lg">
-                   <p className="whitespace-pre-wrap text-sm">{generatedContent}</p>
-                 </div>
-               </CardContent>
-             </Card>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Conteúdo Gerado</CardTitle>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleCopy}>
+                      {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (format) handleFormatAndGenerate(format);
+                      }}
+                      disabled={generating || !format}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={reset}>
+                      <RotateCcw className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="whitespace-pre-wrap text-sm">{generatedContent}</p>
+                </div>
+              </CardContent>
+            </Card>
           ) : generating ? (
             <Card>
-                <CardContent className="flex items-center justify-center py-8">
+              <CardContent className="flex items-center justify-center py-8">
                 <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
-                    <p className="font-medium">Gerando conteúdo...</p>
-                    <p className="text-sm text-gray-500">Isso pode levar alguns segundos</p>
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+                  <p className="font-medium">Gerando conteúdo...</p>
+                  <p className="text-sm text-gray-500">Isso pode levar alguns segundos</p>
                 </div>
-                </CardContent>
+              </CardContent>
             </Card>
           ) : (
             <>
               {/* Seções de configuração (renderização condicional se não houver conteúdo gerado) */}
-              <ExpandableSection title="1. Fontes de Referência" icon={Instagram} expanded={!!expandedSections.sources} onToggle={() => toggleSection('sources')} completed={!!completed.sources} autoFocus={currentFocus === 'sources'}>
-                <SourcesManager sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
+              <ExpandableSection title="1. Fontes de Referência" icon={Instagram}
+                expanded={!!expandedSections.sources}
+                onToggle={() => toggleSection('sources')}
+                completed={!!completed.sources}
+                autoFocus={currentFocus === 'sources'}>
+                <SourcesManager errorText={errorText} setErrorText={setErrorText} sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
               </ExpandableSection>
-              
+
               {sources.length > 0 && (
                 <ExpandableSection title="2. Seleção de Conteúdo" icon={Grid3X3} expanded={!!expandedSections.posts} onToggle={() => toggleSection('posts')} completed={!!completed.posts} autoFocus={currentFocus === 'posts'}>
-                    <ContentSelector sources={sources} selectedPosts={selectedPosts} onSelectionChange={setSelectedPosts} onContinue={handlePostsSelection} />
+                  <ContentSelector sources={sources} selectedPosts={selectedPosts} onSelectionChange={setSelectedPosts} onContinue={handlePostsSelection} />
                 </ExpandableSection>
               )}
 
               {completed.posts && (
                 <>
-                    <ExpandableSection title="3. Objetivo do Conteúdo" icon={Target} expanded={!!expandedSections.goal} onToggle={() => toggleSection('goal')} completed={!!completed.goal} required autoFocus={currentFocus === 'goal'}>
-                        <div className="space-y-3">
-                            {GOALS.map((goalOption) => (
-                                <Card key={goalOption.value} className={cn("cursor-pointer transition-all hover:shadow-md", goal === goalOption.value && "ring-2 ring-blue-500 bg-blue-50")} onClick={() => handleGoalSelection(goalOption.value)}>
-                                    <CardContent className="p-3 flex items-center gap-3">
-                                        <span className="text-lg">{goalOption.emoji}</span>
-                                        <span className="text-sm font-medium">{goalOption.label}</span>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </ExpandableSection>
-                    
-                    {/* Demais seções... */}
-                     {/* <ExpandableSection title="4. Nicho e Público" icon={Users} expanded={!!expandedSections.niche || !!expandedSections.audience} onToggle={() => toggleSection('niche')} completed={!!completed.niche && !!completed.audience} required autoFocus={currentFocus === 'niche' || currentFocus === 'audience'}>
+                  <ExpandableSection title="3. Objetivo do Conteúdo" icon={Target} expanded={!!expandedSections.goal} onToggle={() => toggleSection('goal')} completed={!!completed.goal} required autoFocus={currentFocus === 'goal'}>
+                    <div className="space-y-3">
+                      {GOALS.map((goalOption) => (
+                        <Card key={goalOption.value} className={cn("cursor-pointer transition-all hover:shadow-md", goal === goalOption.value && "ring-2 ring-blue-500 bg-blue-50")} onClick={() => handleGoalSelection(goalOption.value)}>
+                          <CardContent className="p-3 flex items-center gap-3">
+                            <span className="text-lg">{goalOption.emoji}</span>
+                            <span className="text-sm font-medium">{goalOption.label}</span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </ExpandableSection>
+
+                  {/* Demais seções... */}
+                  {/* <ExpandableSection title="4. Nicho e Público" icon={Users} expanded={!!expandedSections.niche || !!expandedSections.audience} onToggle={() => toggleSection('niche')} completed={!!completed.niche && !!completed.audience} required autoFocus={currentFocus === 'niche' || currentFocus === 'audience'}>
                         <div className="space-y-4">
                             <label className="text-sm font-medium">Nicho</label>
                             <Input placeholder="Ex: Fisioterapia, Barbearia..." value={niche} onChange={(e) => setNiche(e.target.value)} onBlur={handleNicheContinue} />
@@ -774,85 +944,85 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                         </div>
                     </ExpandableSection> */}
 
-                    <ExpandableSection
-  title="4. Nicho e Público"
-  icon={Users}
-  expanded={!!expandedSections.niche}
-  onToggle={() => toggleSection('niche')}
-  completed={!!completed.niche && !!completed.audience}
-  required
-  autoFocus={currentFocus === 'niche' || currentFocus === 'audience'}
->
-  <div className="space-y-4">
-    <div>
-      {/* A tag de fechamento foi corrigida para </label> */}
-      <label htmlFor="niche" className="text-sm font-medium">Nicho</label>
-      <Input
-        id="niche"
-        placeholder="Ex: Fisioterapia, Barbearia..."
-        value={niche}
-        onChange={(e) => setNiche(e.target.value)}
-      />
-    </div>
+                  <ExpandableSection
+                    title="4. Nicho e Público"
+                    icon={Users}
+                    expanded={!!expandedSections.niche}
+                    onToggle={() => toggleSection('niche')}
+                    completed={!!completed.niche && !!completed.audience}
+                    required
+                    autoFocus={currentFocus === 'niche' || currentFocus === 'audience'}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        {/* A tag de fechamento foi corrigida para </label> */}
+                        <label htmlFor="niche" className="text-sm font-medium">Nicho</label>
+                        <Input
+                          id="niche"
+                          placeholder="Ex: Fisioterapia, Barbearia..."
+                          value={niche}
+                          onChange={(e) => setNiche(e.target.value)}
+                        />
+                      </div>
 
-    <div>
-      {/* A tag de fechamento foi corrigida para </label> */}
-      <label htmlFor="audience" className="text-sm font-medium">Público-alvo</label>
-      <Textarea
-        id="audience"
-        placeholder="Ex: Mulheres acima de 40 anos com dor lombar..."
-        value={audience}
-        onChange={(e) => setAudience(e.target.value)}
-        rows={3}
-      />
-    </div>
+                      <div>
+                        {/* A tag de fechamento foi corrigida para </label> */}
+                        <label htmlFor="audience" className="text-sm font-medium">Público-alvo</label>
+                        <Textarea
+                          id="audience"
+                          placeholder="Ex: Mulheres acima de 40 anos com dor lombar..."
+                          value={audience}
+                          onChange={(e) => setAudience(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
 
-    <Button
-      className="w-full"
-      onClick={handleNicheAndAudienceContinue}
-      disabled={!niche.trim() || !audience.trim()}
-    >
-      Continuar
-    </Button>
-  </div>
-</ExpandableSection>
+                      <Button
+                        className="w-full"
+                        onClick={handleNicheAndAudienceContinue}
+                        disabled={!niche.trim() || !audience.trim()}
+                      >
+                        Continuar
+                      </Button>
+                    </div>
+                  </ExpandableSection>
 
-                    <ExpandableSection title="5. Assunto e Tom de Voz" icon={MessageSquare} expanded={!!expandedSections.subject || !!expandedSections.tone} onToggle={() => toggleSection('subject')} completed={!!completed.subject && !!completed.tone} required autoFocus={currentFocus === 'subject' || currentFocus === 'tone'}>
-                        <div className="space-y-4">
-                            <label className="text-sm font-medium">Assunto Específico</label>
-                            <Textarea placeholder='Ex: "5 erros comuns ao investir em ações"' value={subject} onChange={(e) => setSubject(e.target.value)} onBlur={handleSubjectContinue} rows={3} />
-                            
-                            <label className="text-sm font-medium">Tom de Voz (selecione um ou mais)</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {TONES.map((toneOption) => (
-                                <div key={toneOption.value} onClick={() => handleToneSelection(toneOption.value)} className={cn("cursor-pointer transition-all border rounded-lg p-3 text-center", tone.includes(toneOption.value) && "ring-2 ring-blue-500 bg-blue-50")}>
-                                    <span className="text-lg block">{toneOption.emoji}</span>
-                                    <span className="text-xs font-medium">{toneOption.label}</span>
-                                </div>
-                                ))}
-                            </div>
-                            {tone.length > 0 && <Button className="w-full" onClick={handleToneContinue}>Confirmar Tom</Button>}
-                        </div>
+                  <ExpandableSection title="5. Assunto e Tom de Voz" icon={MessageSquare} expanded={!!expandedSections.subject || !!expandedSections.tone} onToggle={() => toggleSection('subject')} completed={!!completed.subject && !!completed.tone} required autoFocus={currentFocus === 'subject' || currentFocus === 'tone'}>
+                    <div className="space-y-4">
+                      <label className="text-sm font-medium">Assunto Específico</label>
+                      <Textarea placeholder='Ex: "5 erros comuns ao investir em ações"' value={subject} onChange={(e) => setSubject(e.target.value)} onBlur={handleSubjectContinue} rows={3} />
+
+                      <label className="text-sm font-medium">Tom de Voz (selecione um ou mais)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {TONES.map((toneOption) => (
+                          <div key={toneOption.value} onClick={() => handleToneSelection(toneOption.value)} className={cn("cursor-pointer transition-all border rounded-lg p-3 text-center", tone.includes(toneOption.value) && "ring-2 ring-blue-500 bg-blue-50")}>
+                            <span className="text-lg block">{toneOption.emoji}</span>
+                            <span className="text-xs font-medium">{toneOption.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {tone.length > 0 && <Button className="w-full" onClick={handleToneContinue}>Confirmar Tom</Button>}
+                    </div>
+                  </ExpandableSection>
+
+                  {canGenerate && (
+                    <ExpandableSection title="6. Formato e Geração" icon={FileText} expanded={!!expandedSections.format} onToggle={() => toggleSection('format')} completed={!!completed.format} required autoFocus={currentFocus === 'format'}>
+                      <div className="space-y-3">
+                        <p className="text-sm text-center text-green-600 font-bold">Tudo pronto! Escolha o formato para gerar.</p>
+                        {FORMATS.map((formatOption) => (
+                          <Card key={formatOption.value} className={cn("cursor-pointer transition-all hover:shadow-md", format === formatOption.value && "ring-2 ring-blue-500")} onClick={() => handleFormatAndGenerate(formatOption.value)}>
+                            <CardContent className="p-3 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <span className="text-lg">{formatOption.emoji}</span>
+                                <span className="text-sm font-medium">{formatOption.label}</span>
+                              </div>
+                              {'featured' in formatOption && formatOption.featured && (<Badge>Destaque</Badge>)}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
                     </ExpandableSection>
-
-                    {canGenerate && (
-                        <ExpandableSection title="6. Formato e Geração" icon={FileText} expanded={!!expandedSections.format} onToggle={() => toggleSection('format')} completed={!!completed.format} required autoFocus={currentFocus === 'format'}>
-                        <div className="space-y-3">
-                            <p className="text-sm text-center text-green-600 font-bold">Tudo pronto! Escolha o formato para gerar.</p>
-                            {FORMATS.map((formatOption) => (
-                            <Card key={formatOption.value} className={cn("cursor-pointer transition-all hover:shadow-md", format === formatOption.value && "ring-2 ring-blue-500")} onClick={() => handleFormatAndGenerate(formatOption.value)}>
-                                <CardContent className="p-3 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-lg">{formatOption.emoji}</span>
-                                    <span className="text-sm font-medium">{formatOption.label}</span>
-                                </div>
-                                {formatOption.featured && (<Badge>Destaque</Badge>)}
-                                </CardContent>
-                            </Card>
-                            ))}
-                        </div>
-                        </ExpandableSection>
-                    )}
+                  )}
                 </>
               )}
             </>
@@ -860,7 +1030,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
         </div>
       </ScrollArea>
-      
+
       <ToolSidebarClose onClick={onClose} />
     </aside>
   );
