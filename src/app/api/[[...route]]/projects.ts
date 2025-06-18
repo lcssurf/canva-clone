@@ -57,12 +57,13 @@ const app = new Hono()
         title: z.string().optional(),
         width: z.number().min(1),
         height: z.number().min(1),
+        fabricState: z.string().optional(),
       })
     ),
     async (c) => {
       const auth = c.get("authUser");
       const { projectId } = c.req.valid("param");
-      const { title, width, height } = c.req.valid("json");
+      const { title, width, height, fabricState  } = c.req.valid("json");
 
       if (!auth.token?.id) {
         return c.json({ error: "Unauthorized" }, 401);
@@ -96,7 +97,7 @@ const app = new Hono()
           title: title ?? `Page ${nextOrder + 1}`,
           width,
           height,
-          fabricState: "",//{ version: "5.3.0", objects: [] },
+          fabricState: fabricState ?? "",//{ version: "5.3.0", objects: [] },
           thumbnailUrl: null,
           createdAt: new Date(),
           updatedAt: new Date(),

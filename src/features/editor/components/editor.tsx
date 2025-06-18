@@ -41,7 +41,10 @@ interface EditorProps {
 
 export const Editor = ({ initialData }: EditorProps) => {
 
-  const [generatedContent, setGeneratedContent] = useState<string | null>(null);
+  const [generatedContent, setGeneratedContent] = useState<{
+  headline: string;
+  cards: string;
+} | null>(null);
 
   useEffect(() => {
     console.log("generatedContent", generatedContent);
@@ -77,7 +80,7 @@ export const Editor = ({ initialData }: EditorProps) => {
     refetch: refetchPages,
   } = useGetPages(initialData.id);
 
-  console.log("pages", pages);
+  // console.log("pages", pages);
 
   // useEffect(() => {
   //   console.log("activePageId", activePageId);
@@ -264,6 +267,7 @@ export const Editor = ({ initialData }: EditorProps) => {
           onChangeActiveTool={onChangeActiveTool}
         />
         <AiSidebar
+        projectId= {initialData.id}
           generatedContent={generatedContent}
           setGeneratedContent={setGeneratedContent}
           activeTool={activeTool}

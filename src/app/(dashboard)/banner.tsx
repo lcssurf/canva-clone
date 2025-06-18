@@ -17,10 +17,10 @@ export const Banner = () => {
     setLoading(true);
     mutation.mutate(
       {
-        name: "Untitled project",
+        name: "Carrossel",
         json: "",
-        width: 900,
-        height: 1200,
+        width: 1080,
+        height: 1080,
       },
       {
         onSuccess: ({ data }) => {
