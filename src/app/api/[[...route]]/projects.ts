@@ -88,6 +88,8 @@ const app = new Hono()
         .where(eq(pages.projectId, projectId));
       const nextOrder = (maxOrder ?? -1) + 1;
 
+      console.log("Fabric State:", fabricState);
+      
       // Inserir a nova página
       const [newPage] = await db
         .insert(pages)

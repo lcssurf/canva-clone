@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToolSidebarClose } from '@/features/editor/components/tool-sidebar-close';
 import { ToolSidebarHeader } from '@/features/editor/components/tool-sidebar-header';
+import {generateEditorialBoldTemplate} from '@/lib/createTemplate';
 import {
   ChevronDown,
   ChevronRight,
@@ -766,7 +767,7 @@ const TemplateSelector = ({
                 
                 {/* Modern Minimal */}
                 {/* {template.id === 'modern-minimal' && (
-                  <div className="h-full bg-gradient-to-br from-gray-900 to-gray-700 flex items-center justify-center">
+                  <div className="h-full bg-gradient-to-br from-gray- to-gray-700 flex items-center justify-center">
                     <div className="text-white text-center space-y-2 p-4">
                       <div className="w-12 h-12 bg-white rounded-full mx-auto"></div>
                       <div className="space-y-1">
@@ -1450,7 +1451,7 @@ const handleProfileSubmitAndCreatePages = async () => {
       }
     );
 
-    console.log('🎨 Páginas geradas:', fabricPages.length);
+    console.log('🎨 Páginas geradas:', fabricPages);
 
     // 3. ✅ CORREÇÃO: Criar as páginas SEQUENCIALMENTE
     await createPagesSequentially(fabricPages);
@@ -1483,12 +1484,15 @@ const handleProfileSubmitAndCreatePages = async () => {
 const createPagesSequentially = async (fabricPages: string[]) => {
   console.log('🚀 Iniciando criação sequencial de páginas...');
   
+  console.log(`📄 Total de páginas a serem criadas: ${fabricPages}`);
+  
   for (let index = 0; index < fabricPages.length; index++) {
     const fabricJson = fabricPages[index];
     const pageNumber = index + 1;
     
     try {
       console.log(`📄 Criando página ${pageNumber}/${fabricPages.length}...`);
+      console.log(`Fabric JSON para página ${pageNumber}:`, fabricJson);
       
       // Criar página individual e aguardar conclusão
       await createSinglePage(fabricJson, pageNumber);
@@ -1516,6 +1520,8 @@ const createSinglePage = (fabricJson: string, pageNumber: number): Promise<any> 
   return new Promise((resolve, reject) => {
     // ✅ CORREÇÃO: Título único para cada página
     const uniqueTitle = `Página ${pageNumber} - ${Date.now()}`;
+    
+    console.log("Fabric JSON para criação:", fabricJson);
     
     createPage({ 
       height: 1080, 
@@ -1573,36 +1579,9 @@ const processCarouselContent = (content: any): string[] => {
   return cards;
 };
 
-// Função para gerar as páginas no formato Fabric.js
-const generateFabricPages = async (
-  cards: string[],
-  templateId: string,
-  profile: { username: string; image: string }
-): Promise<string[]> => {
-  const fabricPages: string[] = [];
-  
-  for (let i = 0; i < cards.length; i++) {
-    const cardText = cards[i];
-    const isFirstCard = i === 0;
-    
-    // Gerar página baseada no template
-    const fabricJson = generateFabricTemplate(
-      cardText,
-      templateId,
-      profile,
-      isFirstCard,
-      i + 1,
-      cards.length
-    );
-    
-    fabricPages.push(JSON.stringify(fabricJson));
-  }
-  
-  return fabricPages;
-};
 
 // Função para gerar o template Fabric.js baseado no tipo selecionado
-const generateFabricTemplate = (
+const generateFabricTemplate = async (
   text: string,
   templateId: string,
   profile: { username: string; image: string },
@@ -1610,6 +1589,9 @@ const generateFabricTemplate = (
   pageNumber: number,
   totalPages: number
 ) => {
+  const baseWidth = 1080;
+  const baseHeight = 1080;
+
   const baseTemplate = {
     version: "5.3.0",
     objects: [],
@@ -1618,10 +1600,10 @@ const generateFabricTemplate = (
       version: "5.3.0",
       originX: "left",
       originY: "top",
-      left: 283,
-      top: -215.5,
-      width: 900,
-      height: 1200,
+      left: 175.5,
+      top:  -286.5,
+      width: baseWidth,
+      height: baseHeight,
       fill: "white",
       stroke: null,
       strokeWidth: 1,
@@ -1640,50 +1622,20 @@ const generateFabricTemplate = (
         nonScaling: false
       },
       visible: true,
-      selectable: true,
-      hasControls: true
+      selectable: false,
+      hasControls: false
     }
   };
 
-  // Fundo clipping
-  const clipRect = {
-    type: "rect",
-    version: "5.3.0",
-    originX: "left",
-    originY: "top",
-    left: 283,
-    top: -215.5,
-    width: 900,
-    height: 1200,
-    fill: "white",
-    stroke: null,
-    strokeWidth: 1,
-    scaleX: 1,
-    scaleY: 1,
-    angle: 0,
-    flipX: false,
-    flipY: false,
-    opacity: 1,
-    shadow: {
-      color: "rgba(0,0,0,0.8)",
-      blur: 5,
-      offsetX: 0,
-      offsetY: 0,
-      affectStroke: false,
-      nonScaling: false
-    },
-    visible: true,
-    name: "clip",
-    selectable: false,
-    hasControls: false
-  };
-
-  baseTemplate.objects.push(clipRect);
+  // baseTemplate.objects.push();
 
   // Template específico baseado no ID
   switch (templateId) {
     case 'editorial-bold':
-      return generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+      const fabric = await generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+      console.log(`📄 Template Editorial: `, JSON.stringify(fabric));
+      
+      return fabric;
     
     case 'modern-minimal':
       return generateModernMinimalTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
@@ -1703,401 +1655,203 @@ const generateFabricTemplate = (
 };
 
 // Template Editorial Bold
-const generateEditorialBoldTemplate = (
-  baseTemplate: any,
-  text: string,
-  profile: { username: string; image: string },
-  isFirstCard: boolean,
-  pageNumber: number,
-  totalPages: number
-) => {
-  // ✅ Estrutura básica seguindo o padrão do JSON de exemplo
-  const fabricTemplate = {
-    version: "5.3.0",
-    objects: [],
-    clipPath: {
-      type: "rect",
-      version: "5.3.0",
-      originX: "left",
-      originY: "top",
-      left: 175.5,
-      top: -286.5,
-      width: 900,
-      height: 1200,
-      fill: "white",
-      stroke: null,
-      strokeWidth: 1,
-      strokeDashArray: null,
-      strokeLineCap: "butt",
-      strokeDashOffset: 0,
-      strokeLineJoin: "miter",
-      strokeUniform: false,
-      strokeMiterLimit: 4,
-      scaleX: 1,
-      scaleY: 1,
-      angle: 0,
-      flipX: false,
-      flipY: false,
-      opacity: 1,
-      shadow: {
-        color: "rgba(0,0,0,0.8)",
-        blur: 5,
-        offsetX: 0,
-        offsetY: 0,
-        affectStroke: false,
-        nonScaling: false
-      },
-      visible: true,
-      backgroundColor: "",
-      fillRule: "nonzero",
-      paintFirst: "fill",
-      globalCompositeOperation: "source-over",
-      skewX: 0,
-      skewY: 0,
-      rx: 0,
-      ry: 0,
-      selectable: true,
-      hasControls: true
-    }
-  };
+// const generateEditorialBoldTemplate = (
+//   baseTemplate: any,
+//   text: string,
+//   profile: { username: string; image: string },
+//   isFirstCard: boolean,
+//   pageNumber: number,
+//   totalPages: number
+// ) => {
 
-  // 1. 🔳 Retângulo de clipping (igual ao exemplo)
-  const clipRect = {
-    type: "rect",
-    version: "5.3.0",
-    originX: "left",
-    originY: "top",
-    left: 175.5,
-    top: -286.5,
-    width: 900,
-    height: 1200,
-    fill: "white",
-    stroke: null,
-    strokeWidth: 1,
-    strokeDashArray: null,
-    strokeLineCap: "butt",
-    strokeDashOffset: 0,
-    strokeLineJoin: "miter",
-    strokeUniform: false,
-    strokeMiterLimit: 4,
-    scaleX: 1,
-    scaleY: 1,
-    angle: 0,
-    flipX: false,
-    flipY: false,
-    opacity: 1,
-    shadow: {
-      color: "rgba(0,0,0,0.8)",
-      blur: 5,
-      offsetX: 0,
-      offsetY: 0,
-      affectStroke: false,
-      nonScaling: false
-    },
-    visible: true,
-    backgroundColor: "",
-    fillRule: "nonzero",
-    paintFirst: "fill",
-    globalCompositeOperation: "source-over",
-    skewX: 0,
-    skewY: 0,
-    rx: 0,
-    ry: 0,
-    name: "clip",
-    selectable: false,
-    hasControls: false
-  };
+//   // Clona o baseTemplate para não modificar o objeto original
+//   const fabricTemplate = JSON.parse(JSON.stringify(baseTemplate));
 
-  fabricTemplate.objects.push(clipRect);
+//   // Define a largura padrão para os objetos dentro deste template
+//   const objectWidth = 1080; 
+//   const objectHeight = 1080; // Altura fixa para todos os objetos
+//   const padding = 60;
 
-  // 2. 🎨 Fundo com gradiente (preto/branco ou azul/preto)
-  let gradientFill;
-  if (isFirstCard) {
-    // Primeira página: gradiente preto para branco
-    gradientFill = "linear-gradient(135deg, #000000 0%, #ffffff 100%)";
-  } else {
-    // Páginas de conteúdo: gradiente azul para preto
-    gradientFill = "linear-gradient(135deg, #1e40af 0%, #000000 100%)";
-  }
 
-  const backgroundRect = {
-    type: "rect",
-    version: "5.3.0",
-    originX: "left",
-    originY: "top",
-    left: 175.5,
-    top: -286.5,
-    width: 900,
-    height: 1200,
-    fill: gradientFill,
-    stroke: null,
-    strokeWidth: 1,
-    strokeDashArray: null,
-    strokeLineCap: "butt",
-    strokeDashOffset: 0,
-    strokeLineJoin: "miter",
-    strokeUniform: false,
-    strokeMiterLimit: 4,
-    scaleX: 1,
-    scaleY: 1,
-    angle: 0,
-    flipX: false,
-    flipY: false,
-    opacity: 1,
-    shadow: null,
-    visible: true,
-    backgroundColor: "",
-    fillRule: "nonzero",
-    paintFirst: "fill",
-    globalCompositeOperation: "source-over",
-    skewX: 0,
-    skewY: 0,
-    rx: 0,
-    ry: 0,
-    selectable: true,
-    hasControls: true
-  };
+//   // 1. 🔳 Retângulo de fundo com gradiente
+//   let gradientFill;
+//   if (isFirstCard) {
+//     // Primeira página: gradiente preto para branco
+//     gradientFill = {
+//       type: 'linear',
+//       coords: {
+//         x1: 0, y1: 0,
+//         x2: 0, y2: objectHeight // Coordenadas do gradiente baseadas no tamanho do objeto
+//       },
+//       colorStops: [
+//         { offset: 0, color: '#000000' },
+//         { offset: 1, color: '#ffffff' }
+//       ]
+//     };
+//   } else {
+//     // Páginas de conteúdo: gradiente azul para preto
+//     gradientFill = {
+//       type: 'linear',
+//       coords: {
+//         x1: 0, y1: 0,
+//         x2: objectWidth, y2: 1200
+//       },
+//       colorStops: [
+//         { offset: 0, color: '#1e40af' },
+//         { offset: 1, color: '#000000' }
+//       ]
+//     };
+//   }
 
-  fabricTemplate.objects.push(backgroundRect);
+//   const backgroundRect = {
+//     type: "rect",
+//     version: "5.3.0",
+//     originX: "left",
+//     originY: "top",
+//     left: 0,
+//     top: 0,
+//     width: objectWidth, // Largura definida
+//     height: objectHeight,
+//     fill: gradientFill, // Usando o objeto de gradiente Fabric.js
+//     stroke: null,
+//     strokeWidth: 1,
+//     scaleX: 1,
+//     scaleY: 1,
+//     angle: 0,
+//     flipX: false,
+//     flipY: false,
+//     opacity: 1,
+//     shadow: null,
+//     visible: true,
+//     selectable: false, // Fundo geralmente não é selecionável
+//     hasControls: false
+//   };
 
-  // 3. 👤 Profile Image (maior, no canto superior esquerdo) - apenas se NÃO for headline
-  if (!isFirstCard && profile.image && profile.username) {
-    
-    // Profile Image (circular maior)
-    const profileImage = {
-      type: "image",
-      version: "5.3.0",
-      originX: "center",
-      originY: "center",
-      left: 280, // Posição x maior
-      top: -180, // Posição y no topo
-      width: 120, // Maior
-      height: 120, // Maior
-      fill: "rgb(0,0,0)",
-      stroke: "rgba(255,255,255,1)",
-      strokeWidth: 4,
-      strokeDashArray: null,
-      strokeLineCap: "butt",
-      strokeDashOffset: 0,
-      strokeLineJoin: "miter",
-      strokeUniform: false,
-      strokeMiterLimit: 4,
-      scaleX: 1,
-      scaleY: 1,
-      angle: 0,
-      flipX: false,
-      flipY: false,
-      opacity: 1,
-      shadow: null,
-      visible: true,
-      backgroundColor: "",
-      fillRule: "nonzero",
-      paintFirst: "fill",
-      globalCompositeOperation: "source-over",
-      skewX: 0,
-      skewY: 0,
-      cropX: 0,
-      cropY: 0,
-      src: profile.image,
-      crossOrigin: "anonymous",
-      filters: [],
-      selectable: true,
-      hasControls: true
-    };
+//   fabricTemplate.objects.push(backgroundRect);
 
-    fabricTemplate.objects.push(profileImage);
+//   // 2. 👤 Profile Image (maior, no canto superior esquerdo) - apenas se NÃO for a primeira carta
+//   if (!isFirstCard && profile.image && profile.username && profile.image.startsWith('data:image/')) {
+//     const profileImage = {
+//       type: "image",
+//       version: "5.3.0",
+//       originX: "center",
+//       originY: "center",
+//       left: padding + 60,
+//       top: 80,
+//       width: 120,
+//       height: 120,
+//       fill: "rgb(0,0,0)",
+//       stroke: "rgba(255,255,255,1)",
+//       strokeWidth: 4,
+//       scaleX: 1,
+//       scaleY: 1,
+//       angle: 0,
+//       flipX: false,
+//       flipY: false,
+//       opacity: 1,
+//       shadow: null,
+//       visible: true,
+//       src: profile.image, // A imagem já deve ser base64 aqui
+//       // crossOrigin: "anonymous",
+//       // filters: [],
+//       selectable: true,
+//       hasControls: true
+//     };
+//     fabricTemplate.objects.push(profileImage);
 
-    // Username (ao lado da imagem, maior)
-    const usernameText = {
-      type: "textbox",
-      version: "5.3.0",
-      originX: "left",
-      originY: "center",
-      left: 360, // Ao lado da imagem
-      top: -180, // Mesma altura
-      width: 300,
-      height: 60,
-      fill: "rgba(255, 255, 255, 1)",
-      stroke: null,
-      strokeWidth: 1,
-      strokeDashArray: null,
-      strokeLineCap: "butt",
-      strokeDashOffset: 0,
-      strokeLineJoin: "miter",
-      strokeUniform: false,
-      strokeMiterLimit: 4,
-      scaleX: 1,
-      scaleY: 1,
-      angle: 0,
-      flipX: false,
-      flipY: false,
-      opacity: 1,
-      shadow: null,
-      visible: true,
-      backgroundColor: "",
-      fillRule: "nonzero",
-      paintFirst: "fill",
-      globalCompositeOperation: "source-over",
-      skewX: 0,
-      skewY: 0,
-      fontFamily: "Arial Black",
-      fontWeight: 700,
-      fontSize: 24, // Maior
-      text: `@${profile.username}`,
-      underline: false,
-      overline: false,
-      linethrough: false,
-      textAlign: "left",
-      fontStyle: "normal",
-      lineHeight: 1.16,
-      textBackgroundColor: "",
-      charSpacing: 0,
-      styles: [],
-      direction: "ltr",
-      path: null,
-      pathStartOffset: 0,
-      pathSide: "left",
-      pathAlign: "baseline",
-      minWidth: 20,
-      splitByGrapheme: false,
-      selectable: true,
-      hasControls: true,
-      editable: true
-    };
+//     // Username (ao lado da imagem, maior)
+//     const usernameText = {
+//       type: "textbox",
+//       version: "5.3.0",
+//       originX: "left",
+//       originY: "center",
+//       left: 360,
+//       top: -180,
+//       width: 300,
+//       height: 60,
+//       fill: "rgba(255, 255, 255, 1)",
+//       fontFamily: "Arial Black",
+//       fontWeight: 700,
+//       fontSize: 24,
+//       text: `@${profile.username}`,
+//       textAlign: "left",
+//       lineHeight: 1.16,
+//       selectable: true,
+//       hasControls: true,
+//       editable: true
+//     };
+//     fabricTemplate.objects.push(usernameText);
+//   }
 
-    fabricTemplate.objects.push(usernameText);
-  }
+//   const calculateFontSize = (text: string, isFirstCard: boolean) => {
+//   const length = text.length;
+//   if (isFirstCard) {
+//     if (length > 150) return 32;
+//     if (length > 100) return 38;
+//     if (length > 50) return 45;
+//     return 52;  // Max 52 em vez de 75
+//   } else {
+//     if (length > 200) return 28;
+//     if (length > 100) return 35;
+//     return 42;  // Max 42 em vez de 60
+//   }
+// };
 
-  // 4. 📝 Texto principal (posicionado no centro-baixo)
-  const textLength = text.length;
-  const fontSize = isFirstCard 
-    ? (textLength > 100 ? 55 : textLength > 50 ? 65 : 75) // Fontes grandes para headline
-    : (textLength > 200 ? 40 : textLength > 100 ? 50 : 60); // Fontes grandes para conteúdo
+//   // 3. 📝 Texto principal (posicionado no centro-baixo)
+//   const fontSize = calculateFontSize(text, isFirstCard);
+//   const fontWeight = isFirstCard ? 800 : 600;  // Menos pesado
 
-  // Posição do texto ajustada para centro-baixo
-  const textTop = !isFirstCard ? 50 : 100; // Mais para baixo quando há perfil
+//   // Posição do texto ajustada
+//   const textTop = isFirstCard ? 100 : 50; // Mais para baixo se for a primeira carta, senão um pouco mais acima
 
-  const mainText = {
-    type: "textbox",
-    version: "5.3.0",
-    originX: "left",
-    originY: "top",
-    left: 200, // Centralizado
-    top: textTop,
-    width: 650, // Largura generosa
-    height: 400, // Altura generosa
-    fill: "rgba(255, 255, 255, 1)", // Sempre branco
-    stroke: null,
-    strokeWidth: 1,
-    strokeDashArray: null,
-    strokeLineCap: "butt",
-    strokeDashOffset: 0,
-    strokeLineJoin: "miter",
-    strokeUniform: false,
-    strokeMiterLimit: 4,
-    scaleX: 1,
-    scaleY: 1,
-    angle: 0,
-    flipX: false,
-    flipY: false,
-    opacity: 1,
-    shadow: null,
-    visible: true,
-    backgroundColor: "",
-    fillRule: "nonzero",
-    paintFirst: "fill",
-    globalCompositeOperation: "source-over",
-    skewX: 0,
-    skewY: 0,
-    fontFamily: "Arial Black",
-    fontWeight: isFirstCard ? 900 : 700,
-    fontSize: fontSize,
-    text: text.trim(),
-    underline: false,
-    overline: false,
-    linethrough: false,
-    textAlign: isFirstCard ? "center" : "left", // Centralizado para headline
-    fontStyle: "normal",
-    lineHeight: 1.2,
-    textBackgroundColor: "",
-    charSpacing: 0,
-    styles: [],
-    direction: "ltr",
-    path: null,
-    pathStartOffset: 0,
-    pathSide: "left",
-    pathAlign: "baseline",
-    minWidth: 20,
-    splitByGrapheme: false,
-    selectable: true,
-    hasControls: true,
-    editable: true
-  };
+  
+//   const mainText = {
+//     type: "textbox",
+//     version: "5.3.0",
+//     originX: "left",
+//     originY: "top",
+//     left: padding,
+//     top: isFirstCard ? 200 : 180,
+//     width: 1080 - (padding * 2),
+//     height: 600,
+//     fill: "rgba(255, 255, 255, 1)",
+//     fontFamily: "Arial Black",
+//     fontWeight: isFirstCard ? 900 : 700, // Corrigido: valor para isFirstCard true
+//     fontSize: fontSize,
+//     text: text.trim(),
+//     textAlign: isFirstCard ? "center" : "left",
+//     lineHeight: 1.2,
+//     selectable: true,
+//     hasControls: true,
+//     editable: true
+//   };
+//   fabricTemplate.objects.push(mainText);
 
-  fabricTemplate.objects.push(mainText);
+//   // 4. 📄 Indicador de página (canto inferior direito)
+//   const pageIndicator = {
+//     type: "textbox",
+//     version: "5.3.0",
+//     originX: "right",
+//     originY: "bottom",
+//     left: 1050,
+//     top: 880,
+//     width: 100,
+//     height: 30,
+//     fill: "rgba(255, 255, 255, 0.8)",
+//     fontFamily: "Arial",
+//     fontWeight: 500,
+//     fontSize: 16,
+//     text: `${pageNumber}/${totalPages}`,
+//     textAlign: "right",
+//     lineHeight: 1.16,
+//     selectable: true,
+//     hasControls: true,
+//     editable: true
+//   };
+//   fabricTemplate.objects.push(pageIndicator);
 
-  // 5. 📄 Indicador de página (canto inferior direito)
-  const pageIndicator = {
-    type: "textbox",
-    version: "5.3.0",
-    originX: "right",
-    originY: "bottom",
-    left: 1050,
-    top: 880,
-    width: 100,
-    height: 30,
-    fill: "rgba(255, 255, 255, 0.8)",
-    stroke: null,
-    strokeWidth: 1,
-    strokeDashArray: null,
-    strokeLineCap: "butt",
-    strokeDashOffset: 0,
-    strokeLineJoin: "miter",
-    strokeUniform: false,
-    strokeMiterLimit: 4,
-    scaleX: 1,
-    scaleY: 1,
-    angle: 0,
-    flipX: false,
-    flipY: false,
-    opacity: 1,
-    shadow: null,
-    visible: true,
-    backgroundColor: "",
-    fillRule: "nonzero",
-    paintFirst: "fill",
-    globalCompositeOperation: "source-over",
-    skewX: 0,
-    skewY: 0,
-    fontFamily: "Arial",
-    fontWeight: 500,
-    fontSize: 16,
-    text: `${pageNumber}/${totalPages}`,
-    underline: false,
-    overline: false,
-    linethrough: false,
-    textAlign: "right",
-    fontStyle: "normal",
-    lineHeight: 1.16,
-    textBackgroundColor: "",
-    charSpacing: 0,
-    styles: [],
-    direction: "ltr",
-    path: null,
-    pathStartOffset: 0,
-    pathSide: "left",
-    pathAlign: "baseline",
-    minWidth: 20,
-    splitByGrapheme: false,
-    selectable: true,
-    hasControls: true,
-    editable: true
-  };
-
-  fabricTemplate.objects.push(pageIndicator);
-
-  return fabricTemplate;
-};
+//   return fabricTemplate;
+// };
 
 // 🔧 FUNÇÃO PARA CONVERTER IMAGEM URL PARA BASE64
 const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
@@ -2110,7 +1864,7 @@ const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
     // Tentar converter URL para base64
     const response = await fetch(imageUrl);
     const blob = await response.blob();
-    
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -2130,7 +1884,7 @@ const generateFabricPagesWithBase64 = async (
   profile: { username: string; image: string }
 ): Promise<string[]> => {
   const fabricPages: string[] = [];
-  
+
   // Converter imagem do perfil para base64 se necessário
   let profileImageBase64 = profile.image;
   if (profile.image && !profile.image.startsWith('data:image/')) {
@@ -2145,22 +1899,26 @@ const generateFabricPagesWithBase64 = async (
   for (let i = 0; i < cards.length; i++) {
     const cardText = cards[i];
     const isFirstCard = i === 0;
-    
-    const fabricJson = generateEditorialBoldTemplate(
-      {},
+
+    // Chamar a função principal generateFabricTemplate
+    const fabricJson = await generateFabricTemplate(
       cardText,
-      { 
-        username: profile.username, 
-        image: profileImageBase64 
+      templateId, // Passar o templateId para a função principal
+      {
+        username: profile.username,
+        image: profileImageBase64
       },
       isFirstCard,
       i + 1,
       cards.length
     );
+
+    console.log(`📄 Página ${i + 1}/${cards.length} gerada com template ${templateId}:`, JSON.stringify(fabricJson));
     
+
     fabricPages.push(JSON.stringify(fabricJson));
   }
-  
+
   return fabricPages;
 };
 
