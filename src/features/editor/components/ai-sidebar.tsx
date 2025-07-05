@@ -41,6 +41,7 @@ import { client } from '@/lib/hono';
 import { useCreatePage } from '@/features/pages/api/use-create-page';
 import { useRouter } from "next/router";
 import { useGetPages } from '@/features/pages/api/use-get-pages';
+import { fetchVideoData } from '@/features/video';
 
 // --- Tipos Aprimorados ---
 
@@ -86,14 +87,20 @@ interface YouTubeVideo {
   duration?: number;
 }
 
-interface VideoData {
+export interface VideoData {
   transcript: string;
   url: string;
   title: string;
   thumbnail?: string;
   duration?: number;
-  channelName?: string;
-  channelUrl?: string;
+  metadata?:{
+    author: string,
+        channelId:string,
+        channelUrl: string,
+        description:string,
+        isLiveContent: false,
+        isFamilySafe: true,
+  }
 }
 
 // União Discriminada para Fontes de Dados (mais seguro que `data: any`)
@@ -400,7 +407,7 @@ const SourcesManager: React.FC<{
                 disabled={loading || !youtubeUrl.trim()}
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                Adicionar YouTube
+                Adicionar Video
               </Button>
             </div>
           )}
@@ -421,7 +428,7 @@ const SourcesManager: React.FC<{
 type ContentItem =
   | (InstagramPost & { sourceId: string; type: 'post'; title: string; })
   | (BlogArticle & { sourceId: string; type: 'article'; })
-  | (YouTubeVideo & { sourceId: string; type: 'video'; });
+  | (VideoData & { sourceId: string; type: 'video'; });
 
 // Content Selector Component
 const ContentSelector: React.FC<{
@@ -512,8 +519,18 @@ const ContentSelector: React.FC<{
                     />
                   )}
                   {content.type === 'video' && ( // NOVO
-                    <div className="w-12 h-12 bg-red-100 rounded flex items-center justify-center">
-                      <Video className="w-6 h-6 text-red-600" />
+                    <div className="w-12 h-12 bg-red-100 rounded flex items-center justify-center overflow-hidden">
+                      {content.thumbnail ? (
+                        <Image
+                          src={content.thumbnail}
+                          alt="Thumb do vídeo"
+                          width={48}
+                          height={48}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Video className="w-6 h-6 text-red-600" />
+                      )}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -532,7 +549,11 @@ const ContentSelector: React.FC<{
                           )}
                         </p>
                       ) : content.type === 'video' ? (
-                        <Video className="w-4 h-4 text-red-600" />
+                        // <Video className="w-4 h-4 text-red-600" />
+                        <>
+                          <Video className="w-4 h-4 text-red-600" />
+                          
+                        </>
                       ) :
                         (
                           <FileText className="w-4 h-4 text-blue-600" />
@@ -550,6 +571,21 @@ const ContentSelector: React.FC<{
                       <p className="text-xs text-gray-500 line-clamp-1 mt-1">
                         {content.content}
                       </p>
+                    )}
+                    {content.type === 'video' && (
+                      <>
+                        {content.duration && (
+                            <p className="text-xs text-gray-400">
+                            Duração: {(() => {
+                              // content.duration pode ser 1234 (12 minutos, 34 segundos)
+                              const duration = content.duration || 0;
+                              const minutes = Math.floor(duration / 100);
+                              const seconds = duration % 100;
+                              return `${minutes}:${seconds.toString().padStart(2, '0')} min`;
+                            })()}
+                            </p>
+                        )}
+                      </>
                     )}
                   </div>
                   {isSelected && (
@@ -1334,6 +1370,39 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     }
   };
 
+  const handleAddVideoSource = async (url: string) => {
+    if (!url.trim() || sources.length >= 3) {
+      toast.error('URL inválida ou limite de fontes atingido.');
+      return;
+    }
+    setLoadingState('sources', true);
+    try{
+      const video = await fetchVideoData(url.trim());
+      console.log(`🔄 Dados do vídeo recebidos:`, video);
+      
+      if (!video) {
+        setErrorText('Erro ao obter dados do vídeo. Verifique a URL e tente novamente.');
+        return;
+      }
+      const newSource: SourceData = {
+        id: `video-${Date.now()}`,
+        type: 'video',
+        data: { url: video.url, domain: new URL(video.url).hostname },
+        videos: [video]
+      };
+      setSources(prev => [...prev, newSource]);
+      if (sources.length === 0) {
+        setCompletedState('sources', true);
+      }
+      toast.success('Fonte de vídeo adicionada com sucesso!');
+    } catch (error) {
+      setErrorText('Erro ao obter dados do vídeo. Verifique a URL e tente novamente.');
+      console.error('Error fetching video data:', error);
+    }
+    finally {
+      setLoadingState('sources', false);
+    }
+  }
 //   const handleAddYouTubeSource = async (url: string) => {
 //   if (!url.trim() || sources.length >= 3) {
 //     toast.error('URL inválida ou limite de fontes atingido.');
@@ -1407,6 +1476,8 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   }, [selectedPosts]);
 
   const handlePostsSelection = async () => {
+    console.log(selectedPosts);
+    
     if (isLoading) {
       toast.info("Um processo de transcrição já está em andamento.");
       return;
@@ -1486,7 +1557,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         tone,
         format: selectedFormat,
         selectedPosts: selectedPosts
-          .filter(post => post.type === 'post' || post.type === 'article')
+          .filter(post => post.type === 'post' || post.type === 'article' || post.type === 'video')
           .map(post => ({
             url: post.url,
             type: post.type,
@@ -1498,6 +1569,10 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
             }),
             ...(post.type === 'article' && {
               content: post.content,
+            }),
+            ...(post.type === 'video' && {
+              content: post.transcript || '',
+              transcription: post.transcript || '',
             }),
           })),
       };
@@ -1543,8 +1618,14 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       }
 
     } catch (error) {
+      // Loga o erro diretamente e também tenta serializar, para melhor diagnóstico
       console.error('❌ Erro ao gerar conteúdo:', error);
-
+      try {
+        console.error('❌ Erro ao gerar conteúdo (JSON):', JSON.stringify(error));
+      } catch (jsonErr) {
+        console.error('❌ Erro ao serializar o erro:', jsonErr);
+      }
+      
       // Tratamento específico de erros
       let errorMessage = 'Erro desconhecido ao gerar conteúdo';
 
@@ -2313,7 +2394,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                 </div>
 
                 <SourcesManager 
-                // onAddYouTube={}
+                onAddYouTube={handleAddVideoSource}
                  errorText={errorText} setErrorText={setErrorText} sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
               </ExpandableSection>
 
