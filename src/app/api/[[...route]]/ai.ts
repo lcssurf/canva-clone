@@ -15,7 +15,7 @@ const generateContentSchema = z.object({
   format: z.string().min(1, "Formato é obrigatório"),
   selectedPosts: z.array(z.object({
     url: z.string().url(),
-    type: z.enum(["post", "article"]),
+    type: z.enum(["post", "article", "video"]),
     title: z.string().optional(),
     content: z.string().optional(),
     transcription: z.string().optional(),
@@ -82,6 +82,8 @@ const app = new Hono()
     verifyAuth(),
     zValidator("json", generateContentSchema),
     async (c) => {
+      console.log("🔍 Iniciando geração de conteúdo com dados:", c.req.valid("json"));
+      
       try {
         const auth = c.get("authUser");
         
@@ -121,7 +123,7 @@ const app = new Hono()
           headers: {
             "Content-Type": "application/json",
             "X-API-Key": apiKey, // Header com API Key
-            "User-Agent": "YourApp/1.0",
+            "User-Agent": "Postmix/1.0",
           },
           body: JSON.stringify(requestPayload),
         });

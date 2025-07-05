@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToolSidebarClose } from '@/features/editor/components/tool-sidebar-close';
 import { ToolSidebarHeader } from '@/features/editor/components/tool-sidebar-header';
-import { generateEditorialBoldTemplate } from '@/lib/createTemplate';
+import { generateEditorialBoldTemplate } from '@/lib/cards/createTemplate';
+import { processCarouselContent } from '@/lib/cards/processContent'
 import {
   ChevronDown,
   ChevronRight,
@@ -93,13 +94,13 @@ export interface VideoData {
   title: string;
   thumbnail?: string;
   duration?: number;
-  metadata?:{
+  metadata?: {
     author: string,
-        channelId:string,
-        channelUrl: string,
-        description:string,
-        isLiveContent: false,
-        isFamilySafe: true,
+    channelId: string,
+    channelUrl: string,
+    description: string,
+    isLiveContent: false,
+    isFamilySafe: true,
   }
 }
 
@@ -217,7 +218,7 @@ const SourcesManager: React.FC<{
   loading: boolean;
   maxSources: number;
 }> = ({ sources, onAddInstagram, onAddBlog, onRemove, loading, maxSources, errorText, setErrorText, onAddYouTube, }) => {
-  const [activeTab, setActiveTab] = useState<'instagram' | 'blog' | 'video' >('blog');
+  const [activeTab, setActiveTab] = useState<'instagram' | 'blog' | 'video'>('blog');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [instagramUsername, setInstagramUsername] = useState('');
   const [blogUrl, setBlogUrl] = useState('');
@@ -439,27 +440,27 @@ const ContentSelector: React.FC<{
 }> = ({ sources, selectedPosts, onSelectionChange, onContinue }) => {
 
   const allContent: ContentItem[] = sources.flatMap(source => {
-  if (source.type === 'instagram') {
-    return (source.posts ?? []).map(post => ({
-      ...post,
-      sourceId: source.id,
-      type: 'post' as const,
-      title: post.transcription?.substring(0, 80) || 'Post do Instagram',
-    })) as ContentItem[];
-  } else if (source.type === 'video') { // NOVO
-    return (source.videos ?? []).map(video => ({
-      ...video,
-      sourceId: source.id,
-      type: 'video' as const,
-    })) as ContentItem[];
-  } else {
-    return (source.articles ?? []).map(article => ({
-      ...article,
-      sourceId: source.id,
-      type: 'article' as const,
-    })) as ContentItem[];
-  }
-});
+    if (source.type === 'instagram') {
+      return (source.posts ?? []).map(post => ({
+        ...post,
+        sourceId: source.id,
+        type: 'post' as const,
+        title: post.transcription?.substring(0, 80) || 'Post do Instagram',
+      })) as ContentItem[];
+    } else if (source.type === 'video') { // NOVO
+      return (source.videos ?? []).map(video => ({
+        ...video,
+        sourceId: source.id,
+        type: 'video' as const,
+      })) as ContentItem[];
+    } else {
+      return (source.articles ?? []).map(article => ({
+        ...article,
+        sourceId: source.id,
+        type: 'article' as const,
+      })) as ContentItem[];
+    }
+  });
 
   const toggleSelection = (content: ContentItem) => {
     const url = content.url;
@@ -552,7 +553,7 @@ const ContentSelector: React.FC<{
                         // <Video className="w-4 h-4 text-red-600" />
                         <>
                           <Video className="w-4 h-4 text-red-600" />
-                          
+
                         </>
                       ) :
                         (
@@ -575,7 +576,7 @@ const ContentSelector: React.FC<{
                     {content.type === 'video' && (
                       <>
                         {content.duration && (
-                            <p className="text-xs text-gray-400">
+                          <p className="text-xs text-gray-400">
                             Duração: {(() => {
                               // content.duration pode ser 1234 (12 minutos, 34 segundos)
                               const duration = content.duration || 0;
@@ -583,7 +584,7 @@ const ContentSelector: React.FC<{
                               const seconds = duration % 100;
                               return `${minutes}:${seconds.toString().padStart(2, '0')} min`;
                             })()}
-                            </p>
+                          </p>
                         )}
                       </>
                     )}
@@ -1113,6 +1114,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   // Current focus tracking
   const [currentFocus, setCurrentFocus] = useState<SectionName>('sources');
 
+  //@ts-ignore
   const { processTranscriptions, isBatchLoading: isLoading } = useTranscriptionWithToasts(selectedPosts, setSelectedPosts);
 
 
@@ -1376,10 +1378,10 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       return;
     }
     setLoadingState('sources', true);
-    try{
+    try {
       const video = await fetchVideoData(url.trim());
       console.log(`🔄 Dados do vídeo recebidos:`, video);
-      
+
       if (!video) {
         setErrorText('Erro ao obter dados do vídeo. Verifique a URL e tente novamente.');
         return;
@@ -1403,65 +1405,65 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       setLoadingState('sources', false);
     }
   }
-//   const handleAddYouTubeSource = async (url: string) => {
-//   if (!url.trim() || sources.length >= 3) {
-//     toast.error('URL inválida ou limite de fontes atingido.');
-//     return;
-//   }
+  //   const handleAddYouTubeSource = async (url: string) => {
+  //   if (!url.trim() || sources.length >= 3) {
+  //     toast.error('URL inválida ou limite de fontes atingido.');
+  //     return;
+  //   }
 
-//   // ADICIONAR: Importar e usar a função de limpeza
-//   // const { cleanYouTubeUrl } = require('@/features/youtube/use-youtube-transcript'); // ou o caminho correto
-//   // const cleanUrl = cleanYouTubeUrl(url.trim());
-//   // console.log('🔗 URL original:', url);
-//   // console.log('🔗 URL limpa:', cleanUrl);
+  //   // ADICIONAR: Importar e usar a função de limpeza
+  //   // const { cleanYouTubeUrl } = require('@/features/youtube/use-youtube-transcript'); // ou o caminho correto
+  //   // const cleanUrl = cleanYouTubeUrl(url.trim());
+  //   // console.log('🔗 URL original:', url);
+  //   // console.log('🔗 URL limpa:', cleanUrl);
 
-//   setLoadingState('sources', true);
+  //   setLoadingState('sources', true);
 
-//   try {
-//     const response = await client.api.youtube.transcript.$post({
-//       json: {
-//         videoUrl: cleanUrl, // USAR URL LIMPA
-//         lang: 'pt',
-//         country: 'BR'
-//       }
-//     });
+  //   try {
+  //     const response = await client.api.youtube.transcript.$post({
+  //       json: {
+  //         videoUrl: cleanUrl, // USAR URL LIMPA
+  //         lang: 'pt',
+  //         country: 'BR'
+  //       }
+  //     });
 
-//     if (!response.ok) {
-//       const errorData = await response.json();
-//       throw new Error(errorData.error || 'Erro ao obter transcrição');
-//     }
+  //     if (!response.ok) {
+  //       const errorData = await response.json();
+  //       throw new Error(errorData.error || 'Erro ao obter transcrição');
+  //     }
 
-//     const { data } = await response.json();
+  //     const { data } = await response.json();
 
-//     const youtubeVideo: YouTubeVideo = {
-//       url: data.videoUrl,
-//       title: `Vídeo YouTube ${data.videoId}`,
-//       transcript: data.fullText,
-//       duration: data.totalDuration
-//     };
+  //     const youtubeVideo: YouTubeVideo = {
+  //       url: data.videoUrl,
+  //       title: `Vídeo YouTube ${data.videoId}`,
+  //       transcript: data.fullText,
+  //       duration: data.totalDuration
+  //     };
 
-//     const newSource: SourceData = {
-//       id: `youtube-${Date.now()}`,
-//       type: 'youtube',
-//       data: { url: cleanUrl, domain: 'youtube.com' }, // USAR URL LIMPA
-//       videos: [youtubeVideo]
-//     };
+  //     const newSource: SourceData = {
+  //       id: `youtube-${Date.now()}`,
+  //       type: 'youtube',
+  //       data: { url: cleanUrl, domain: 'youtube.com' }, // USAR URL LIMPA
+  //       videos: [youtubeVideo]
+  //     };
 
-//     setSources(prev => [...prev, newSource]);
+  //     setSources(prev => [...prev, newSource]);
 
-//     if (sources.length === 0) {
-//       setCompletedState('sources', true);
-//     }
+  //     if (sources.length === 0) {
+  //       setCompletedState('sources', true);
+  //     }
 
-//     toast.success('Transcrição do YouTube obtida com sucesso!');
+  //     toast.success('Transcrição do YouTube obtida com sucesso!');
 
-//   } catch (error) {
-//     setErrorText('Erro ao obter transcrição do YouTube. Verifique a URL e tente novamente.');
-//     console.error('Error fetching YouTube transcript:', error);
-//   } finally {
-//     setLoadingState('sources', false);
-//   }
-// };
+  //   } catch (error) {
+  //     setErrorText('Erro ao obter transcrição do YouTube. Verifique a URL e tente novamente.');
+  //     console.error('Error fetching YouTube transcript:', error);
+  //   } finally {
+  //     setLoadingState('sources', false);
+  //   }
+  // };
 
   const removeSource = (sourceId: string) => {
     setSources(prev => prev.filter(s => s.id !== sourceId));
@@ -1477,7 +1479,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   const handlePostsSelection = async () => {
     console.log(selectedPosts);
-    
+
     if (isLoading) {
       toast.info("Um processo de transcrição já está em andamento.");
       return;
@@ -1581,6 +1583,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
       // Chamar a nova rota de geração de conteúdo
       const response = await client.api.ai["generate-content"].$post({
+        //@ts-ignore
         json: payload
       });
 
@@ -1625,7 +1628,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       } catch (jsonErr) {
         console.error('❌ Erro ao serializar o erro:', jsonErr);
       }
-      
+
       // Tratamento específico de erros
       let errorMessage = 'Erro desconhecido ao gerar conteúdo';
 
@@ -1699,7 +1702,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
     try {
       // 1. Processar o conteúdo
-      const processedCards = processCarouselContent(generatedContent);
+      const processedCards = processCarouselContent(generatedContent, {unlimited: true});
 
       console.log('🔄 Conteúdo processado:', processedCards);
 
@@ -1808,42 +1811,42 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   };
 
   // Função para processar o conteúdo gerado
-  const processCarouselContent = (content: any): string[] => {
-    const cards: string[] = [];
+  // const processCarouselContent = (content: any): string[] => {
+  //   const cards: string[] = [];
 
-    // 1. Adicionar headline como primeiro card
-    if (content.headline && content.headline.trim()) {
-      cards.push(content.headline.trim());
-    }
+  //   // 1. Adicionar headline como primeiro card
+  //   if (content.headline && content.headline.trim()) {
+  //     cards.push(content.headline.trim());
+  //   }
 
-    // 2. Processar os cards do conteúdo
-    if (content.cards && typeof content.cards === 'string') {
-      const cardsText = content.cards
-        .split('\n')
-        .map((line: string) => line.trim())
-        .filter((line: string) => line.length > 0)
-        .map((line: string) => {
-          // ✅ MELHORAMENTO: Regex mais robusta para remover numeração
-          return line
-            .replace(/^texto\s+\d+\s*[-–—]\s*/i, '') // Remove "texto X -"
-            .replace(/^\d+[\.\)]\s*/, '') // Remove "1." ou "1)"
-            .replace(/^[-–—•]\s*/, '') // Remove bullets
-            .trim();
-        })
-        .filter((line: string) => line.length > 10); // ✅ Filtrar textos muito curtos
+  //   // 2. Processar os cards do conteúdo
+  //   if (content.cards && typeof content.cards === 'string') {
+  //     const cardsText = content.cards
+  //       .split('\n')
+  //       .map((line: string) => line.trim())
+  //       .filter((line: string) => line.length > 0)
+  //       .map((line: string) => {
+  //         // ✅ MELHORAMENTO: Regex mais robusta para remover numeração
+  //         return line
+  //           .replace(/^texto\s+\d+\s*[-–—]\s*/i, '') // Remove "texto X -"
+  //           .replace(/^\d+[\.\)]\s*/, '') // Remove "1." ou "1)"
+  //           .replace(/^[-–—•]\s*/, '') // Remove bullets
+  //           .trim();
+  //       })
+  //       .filter((line: string) => line.length > 10); // ✅ Filtrar textos muito curtos
 
-      cards.push(...cardsText);
-    }
+  //     cards.push(...cardsText);
+  //   }
 
-    // ✅ VALIDAÇÃO: Garantir que temos pelo menos 1 card
-    if (cards.length === 0) {
-      cards.push('Conteúdo do carrossel');
-    }
+  //   // ✅ VALIDAÇÃO: Garantir que temos pelo menos 1 card
+  //   if (cards.length === 0) {
+  //     cards.push('Conteúdo do carrossel');
+  //   }
 
-    console.log(`📝 Processados ${cards.length} cards:`, cards.map((c, i) => `${i + 1}. ${c.substring(0, 50)}...`));
+  //   console.log(`📝 Processados ${cards.length} cards:`, cards.map((c, i) => `${i + 1}. ${c.substring(0, 50)}...`));
 
-    return cards;
-  };
+  //   return cards;
+  // };
 
 
   // Função para gerar o template Fabric.js baseado no tipo selecionado
@@ -1919,205 +1922,6 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         return generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
     }
   };
-
-  // Template Editorial Bold
-  // const generateEditorialBoldTemplate = (
-  //   baseTemplate: any,
-  //   text: string,
-  //   profile: { username: string; image: string },
-  //   isFirstCard: boolean,
-  //   pageNumber: number,
-  //   totalPages: number
-  // ) => {
-
-  //   // Clona o baseTemplate para não modificar o objeto original
-  //   const fabricTemplate = JSON.parse(JSON.stringify(baseTemplate));
-
-  //   // Define a largura padrão para os objetos dentro deste template
-  //   const objectWidth = 1080; 
-  //   const objectHeight = 1080; // Altura fixa para todos os objetos
-  //   const padding = 60;
-
-
-  //   // 1. 🔳 Retângulo de fundo com gradiente
-  //   let gradientFill;
-  //   if (isFirstCard) {
-  //     // Primeira página: gradiente preto para branco
-  //     gradientFill = {
-  //       type: 'linear',
-  //       coords: {
-  //         x1: 0, y1: 0,
-  //         x2: 0, y2: objectHeight // Coordenadas do gradiente baseadas no tamanho do objeto
-  //       },
-  //       colorStops: [
-  //         { offset: 0, color: '#000000' },
-  //         { offset: 1, color: '#ffffff' }
-  //       ]
-  //     };
-  //   } else {
-  //     // Páginas de conteúdo: gradiente azul para preto
-  //     gradientFill = {
-  //       type: 'linear',
-  //       coords: {
-  //         x1: 0, y1: 0,
-  //         x2: objectWidth, y2: 1200
-  //       },
-  //       colorStops: [
-  //         { offset: 0, color: '#1e40af' },
-  //         { offset: 1, color: '#000000' }
-  //       ]
-  //     };
-  //   }
-
-  //   const backgroundRect = {
-  //     type: "rect",
-  //     version: "5.3.0",
-  //     originX: "left",
-  //     originY: "top",
-  //     left: 0,
-  //     top: 0,
-  //     width: objectWidth, // Largura definida
-  //     height: objectHeight,
-  //     fill: gradientFill, // Usando o objeto de gradiente Fabric.js
-  //     stroke: null,
-  //     strokeWidth: 1,
-  //     scaleX: 1,
-  //     scaleY: 1,
-  //     angle: 0,
-  //     flipX: false,
-  //     flipY: false,
-  //     opacity: 1,
-  //     shadow: null,
-  //     visible: true,
-  //     selectable: false, // Fundo geralmente não é selecionável
-  //     hasControls: false
-  //   };
-
-  //   fabricTemplate.objects.push(backgroundRect);
-
-  //   // 2. 👤 Profile Image (maior, no canto superior esquerdo) - apenas se NÃO for a primeira carta
-  //   if (!isFirstCard && profile.image && profile.username && profile.image.startsWith('data:image/')) {
-  //     const profileImage = {
-  //       type: "image",
-  //       version: "5.3.0",
-  //       originX: "center",
-  //       originY: "center",
-  //       left: padding + 60,
-  //       top: 80,
-  //       width: 120,
-  //       height: 120,
-  //       fill: "rgb(0,0,0)",
-  //       stroke: "rgba(255,255,255,1)",
-  //       strokeWidth: 4,
-  //       scaleX: 1,
-  //       scaleY: 1,
-  //       angle: 0,
-  //       flipX: false,
-  //       flipY: false,
-  //       opacity: 1,
-  //       shadow: null,
-  //       visible: true,
-  //       src: profile.image, // A imagem já deve ser base64 aqui
-  //       // crossOrigin: "anonymous",
-  //       // filters: [],
-  //       selectable: true,
-  //       hasControls: true
-  //     };
-  //     fabricTemplate.objects.push(profileImage);
-
-  //     // Username (ao lado da imagem, maior)
-  //     const usernameText = {
-  //       type: "textbox",
-  //       version: "5.3.0",
-  //       originX: "left",
-  //       originY: "center",
-  //       left: 360,
-  //       top: -180,
-  //       width: 300,
-  //       height: 60,
-  //       fill: "rgba(255, 255, 255, 1)",
-  //       fontFamily: "Arial Black",
-  //       fontWeight: 700,
-  //       fontSize: 24,
-  //       text: `@${profile.username}`,
-  //       textAlign: "left",
-  //       lineHeight: 1.16,
-  //       selectable: true,
-  //       hasControls: true,
-  //       editable: true
-  //     };
-  //     fabricTemplate.objects.push(usernameText);
-  //   }
-
-  //   const calculateFontSize = (text: string, isFirstCard: boolean) => {
-  //   const length = text.length;
-  //   if (isFirstCard) {
-  //     if (length > 150) return 32;
-  //     if (length > 100) return 38;
-  //     if (length > 50) return 45;
-  //     return 52;  // Max 52 em vez de 75
-  //   } else {
-  //     if (length > 200) return 28;
-  //     if (length > 100) return 35;
-  //     return 42;  // Max 42 em vez de 60
-  //   }
-  // };
-
-  //   // 3. 📝 Texto principal (posicionado no centro-baixo)
-  //   const fontSize = calculateFontSize(text, isFirstCard);
-  //   const fontWeight = isFirstCard ? 800 : 600;  // Menos pesado
-
-  //   // Posição do texto ajustada
-  //   const textTop = isFirstCard ? 100 : 50; // Mais para baixo se for a primeira carta, senão um pouco mais acima
-
-
-  //   const mainText = {
-  //     type: "textbox",
-  //     version: "5.3.0",
-  //     originX: "left",
-  //     originY: "top",
-  //     left: padding,
-  //     top: isFirstCard ? 200 : 180,
-  //     width: 1080 - (padding * 2),
-  //     height: 600,
-  //     fill: "rgba(255, 255, 255, 1)",
-  //     fontFamily: "Arial Black",
-  //     fontWeight: isFirstCard ? 900 : 700, // Corrigido: valor para isFirstCard true
-  //     fontSize: fontSize,
-  //     text: text.trim(),
-  //     textAlign: isFirstCard ? "center" : "left",
-  //     lineHeight: 1.2,
-  //     selectable: true,
-  //     hasControls: true,
-  //     editable: true
-  //   };
-  //   fabricTemplate.objects.push(mainText);
-
-  //   // 4. 📄 Indicador de página (canto inferior direito)
-  //   const pageIndicator = {
-  //     type: "textbox",
-  //     version: "5.3.0",
-  //     originX: "right",
-  //     originY: "bottom",
-  //     left: 1050,
-  //     top: 880,
-  //     width: 100,
-  //     height: 30,
-  //     fill: "rgba(255, 255, 255, 0.8)",
-  //     fontFamily: "Arial",
-  //     fontWeight: 500,
-  //     fontSize: 16,
-  //     text: `${pageNumber}/${totalPages}`,
-  //     textAlign: "right",
-  //     lineHeight: 1.16,
-  //     selectable: true,
-  //     hasControls: true,
-  //     editable: true
-  //   };
-  //   fabricTemplate.objects.push(pageIndicator);
-
-  //   return fabricTemplate;
-  // };
 
   // 🔧 FUNÇÃO PARA CONVERTER IMAGEM URL PARA BASE64
   const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
@@ -2393,9 +2197,9 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                   </Button>
                 </div>
 
-                <SourcesManager 
-                onAddYouTube={handleAddVideoSource}
-                 errorText={errorText} setErrorText={setErrorText} sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
+                <SourcesManager
+                  onAddYouTube={handleAddVideoSource}
+                  errorText={errorText} setErrorText={setErrorText} sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
               </ExpandableSection>
 
               {sources.length > 0 && (
