@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToolSidebarClose } from '@/features/editor/components/tool-sidebar-close';
 import { ToolSidebarHeader } from '@/features/editor/components/tool-sidebar-header';
-import {generateEditorialBoldTemplate} from '@/lib/createTemplate';
+import { generateEditorialBoldTemplate } from '@/lib/createTemplate';
 import {
   ChevronDown,
   ChevronRight,
@@ -55,12 +55,13 @@ interface BlogArticle {
 interface InstagramPost {
   url: string;
   images: string[];
-  reel?: boolean;
-  carousel?: boolean;
+  reel: boolean;
+  carousel: boolean;
   videoURL?: string;
-  transcription?: string;
+  transcription: string;
   likes?: number;
   datetime?: string;
+  aiTranscription?: string;
 }
 
 interface Profile {
@@ -78,6 +79,23 @@ interface BlogData {
   domain: string;
 }
 
+interface YouTubeVideo {
+  url: string;
+  title: string;
+  transcript: string;
+  duration?: number;
+}
+
+interface VideoData {
+  transcript: string;
+  url: string;
+  title: string;
+  thumbnail?: string;
+  duration?: number;
+  channelName?: string;
+  channelUrl?: string;
+}
+
 // União Discriminada para Fontes de Dados (mais seguro que `data: any`)
 type SourceData =
   | {
@@ -91,6 +109,11 @@ type SourceData =
     type: 'blog';
     data: BlogData;
     articles?: BlogArticle[];
+  } | {
+    id: string;
+    type: 'video';
+    data: { url: string; domain: string };
+    videos?: VideoData[];
   };
 
 
@@ -181,14 +204,23 @@ const SourcesManager: React.FC<{
   errorText?: string | null;
   sources: SourceData[];
   onAddInstagram: (username: string) => void;
+  onAddYouTube: (url: string) => void;
   onAddBlog: (url: string) => void;
   onRemove: (sourceId: string) => void;
   loading: boolean;
   maxSources: number;
-}> = ({ sources, onAddInstagram, onAddBlog, onRemove, loading, maxSources, errorText, setErrorText }) => {
-  const [activeTab, setActiveTab] = useState<'instagram' | 'blog'>('instagram');
+}> = ({ sources, onAddInstagram, onAddBlog, onRemove, loading, maxSources, errorText, setErrorText, onAddYouTube, }) => {
+  const [activeTab, setActiveTab] = useState<'instagram' | 'blog' | 'video' >('blog');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [instagramUsername, setInstagramUsername] = useState('');
   const [blogUrl, setBlogUrl] = useState('');
+
+  const handleAddYouTube = () => {
+    if (youtubeUrl.trim()) {
+      onAddYouTube(youtubeUrl);
+      setYoutubeUrl('');
+    }
+  };
 
   const handleAddInstagram = () => {
     if (instagramUsername.trim()) {
@@ -215,6 +247,8 @@ const SourcesManager: React.FC<{
               <div className="flex items-center gap-3">
                 {source.type === 'instagram' ? (
                   <Instagram className="w-4 h-4 text-pink-600" />
+                ) : source.type === 'video' ? (
+                  <Video className="w-4 h-4 text-red-600" />
                 ) : (
                   <FileText className="w-4 h-4 text-blue-600" />
                 )}
@@ -228,7 +262,11 @@ const SourcesManager: React.FC<{
                   <p className="text-xs text-gray-500">
                     {source.type === 'instagram'
                       ? `${source.posts?.length || 0} posts`
-                      : `${source.articles?.length || 0} artigos`
+                      : source.type === 'blog'
+                        ? `${source.articles?.length || 0} artigos`
+                        : source.type === 'video'
+                          ? `${source.videos?.length || 0} vídeos`
+                          : ''
                     }
                   </p>
                 </div>
@@ -250,7 +288,7 @@ const SourcesManager: React.FC<{
       {sources.length < maxSources && (
         <div className="space-y-4">
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            <Button
+            {/* <Button
               variant={activeTab === 'instagram' ? 'default' : 'ghost'}
               size="sm"
               className="flex-1"
@@ -258,7 +296,7 @@ const SourcesManager: React.FC<{
             >
               <Instagram className="w-4 h-4 mr-2" />
               Instagram
-            </Button>
+            </Button> */}
             <Button
               variant={activeTab === 'blog' ? 'default' : 'ghost'}
               size="sm"
@@ -268,6 +306,17 @@ const SourcesManager: React.FC<{
               <FileText className="w-4 h-4 mr-2" />
               Blog/Site
             </Button>
+
+            <Button
+              variant={activeTab === 'video' ? 'default' : 'ghost'}
+              size="sm"
+              className="flex-1"
+              onClick={() => setActiveTab('video')}
+            >
+              <Video className="w-4 h-4 mr-2" />
+              Video
+            </Button>
+
           </div>
 
           {activeTab === 'instagram' && (
@@ -315,6 +364,47 @@ const SourcesManager: React.FC<{
               </Button>
             </div>
           )}
+
+          {activeTab === 'video' && (
+            <div className="space-y-3">
+              <div className="bg-gray-50 rounded-lg p-3 mb-2">
+                <p className="text-xs font-semibold mb-1 text-gray-700">Sites suportados:</p>
+                <ul className="flex flex-wrap gap-2 text-xs">
+                  <li className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1">
+                    <Video className="w-3 h-3 text-red-600" /> YouTube
+                  </li>
+                  <li className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1">
+                    <Video className="w-3 h-3 text-blue-500" /> Vimeo
+                  </li>
+                  <li className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1">
+                    <Video className="w-3 h-3 text-green-600" /> Google Drive
+                  </li>
+                  <li className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2 py-1">
+                    <Video className="w-3 h-3 text-blue-700" /> Facebook
+                  </li>
+                </ul>
+              </div>
+              <Input
+                onChangeCapture={() => setErrorText && setErrorText(null)}
+                placeholder="https://youtube.com/watch?v=..."
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                disabled={loading}
+              />
+              {errorText && (
+                <p className="text-xs text-red-600">{errorText}</p>
+              )}
+              <Button
+                className="w-full"
+                onClick={handleAddYouTube}
+                disabled={loading || !youtubeUrl.trim()}
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                Adicionar YouTube
+              </Button>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -330,7 +420,8 @@ const SourcesManager: React.FC<{
 // Tipo `ContentItem` reutilizando tipos existentes
 type ContentItem =
   | (InstagramPost & { sourceId: string; type: 'post'; title: string; })
-  | (BlogArticle & { sourceId: string; type: 'article'; });
+  | (BlogArticle & { sourceId: string; type: 'article'; })
+  | (YouTubeVideo & { sourceId: string; type: 'video'; });
 
 // Content Selector Component
 const ContentSelector: React.FC<{
@@ -341,21 +432,27 @@ const ContentSelector: React.FC<{
 }> = ({ sources, selectedPosts, onSelectionChange, onContinue }) => {
 
   const allContent: ContentItem[] = sources.flatMap(source => {
-    if (source.type === 'instagram') {
-      return (source.posts ?? []).map(post => ({
-        ...post,
-        sourceId: source.id,
-        type: 'post' as const,
-        title: post.transcription?.substring(0, 80) || 'Post do Instagram',
-      })) as ContentItem[];
-    } else {
-      return (source.articles ?? []).map(article => ({
-        ...article,
-        sourceId: source.id,
-        type: 'article' as const,
-      })) as ContentItem[];
-    }
-  });
+  if (source.type === 'instagram') {
+    return (source.posts ?? []).map(post => ({
+      ...post,
+      sourceId: source.id,
+      type: 'post' as const,
+      title: post.transcription?.substring(0, 80) || 'Post do Instagram',
+    })) as ContentItem[];
+  } else if (source.type === 'video') { // NOVO
+    return (source.videos ?? []).map(video => ({
+      ...video,
+      sourceId: source.id,
+      type: 'video' as const,
+    })) as ContentItem[];
+  } else {
+    return (source.articles ?? []).map(article => ({
+      ...article,
+      sourceId: source.id,
+      type: 'article' as const,
+    })) as ContentItem[];
+  }
+});
 
   const toggleSelection = (content: ContentItem) => {
     const url = content.url;
@@ -414,6 +511,11 @@ const ContentSelector: React.FC<{
                       className="w-12 h-12 object-cover rounded"
                     />
                   )}
+                  {content.type === 'video' && ( // NOVO
+                    <div className="w-12 h-12 bg-red-100 rounded flex items-center justify-center">
+                      <Video className="w-6 h-6 text-red-600" />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       {content.type === 'post' ? (
@@ -429,9 +531,12 @@ const ContentSelector: React.FC<{
                             </span>
                           )}
                         </p>
-                      ) : (
-                        <FileText className="w-4 h-4 text-blue-600" />
-                      )}
+                      ) : content.type === 'video' ? (
+                        <Video className="w-4 h-4 text-red-600" />
+                      ) :
+                        (
+                          <FileText className="w-4 h-4 text-blue-600" />
+                        )}
                       <p className="text-xs text-gray-500 truncate">
                         {sourceData?.type === 'instagram'
                           ? `@${sourceData.data.username}`
@@ -525,6 +630,14 @@ const ExpandableSection: React.FC<{
 };
 
 // Profile Info Collector Component com Upload
+interface ProfileInfoCollectorProps {
+  username: string;
+  profileImage: string;
+  onUsernameChange: (username: string) => void;
+  onProfileImageChange: (image: string) => void;
+  onContinue: () => void;
+  loading?: boolean;
+}
 const ProfileInfoCollector = ({
   username,
   profileImage,
@@ -532,14 +645,14 @@ const ProfileInfoCollector = ({
   onProfileImageChange,
   onContinue,
   loading = false
-}) => {
+}: ProfileInfoCollectorProps) => {
   const [imagePreview, setImagePreview] = useState(profileImage);
   const [imageError, setImageError] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
 
 
-  const handleImageUrlChange = (url) => {
+  const handleImageUrlChange = (url: string) => {
     onProfileImageChange(url);
     setImagePreview(url);
     setImageError(false);
@@ -549,12 +662,12 @@ const ProfileInfoCollector = ({
     setImageError(true);
   };
 
-  const handleFileUpload = (event) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const result = e.target?.result;
+        const result = (e.target as FileReader)?.result;
         if (typeof result === 'string') {
           handleImageUrlChange(result);
         }
@@ -563,7 +676,7 @@ const ProfileInfoCollector = ({
     }
   };
 
-  const handleDrag = (e) => {
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -573,16 +686,16 @@ const ProfileInfoCollector = ({
     }
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     const files = e.dataTransfer.files;
     if (files && files[0] && files[0].type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const result = e.target?.result;
+        const result = (e.target as FileReader)?.result;
         if (typeof result === 'string') {
           handleImageUrlChange(result);
         }
@@ -649,7 +762,7 @@ const ProfileInfoCollector = ({
           <label className="text-sm font-medium text-gray-700">
             Foto de perfil
           </label>
-          
+
           {/* Área de upload */}
           <div
             className={cn(
@@ -695,7 +808,7 @@ const ProfileInfoCollector = ({
             onChange={(e) => handleImageUrlChange(e.target.value)}
             disabled={loading}
           />
-          
+
           {imageError && (
             <p className="text-xs text-red-600">
               ❌ Não foi possível carregar a imagem. Tente outra.
@@ -731,11 +844,17 @@ const ProfileInfoCollector = ({
 };
 
 // Template Selector Component
-const TemplateSelector = ({ 
-  selectedTemplate, 
-  onTemplateSelect, 
-  onContinue, 
-  generating 
+interface TemplateSelectorProps {
+  selectedTemplate: TemplateId | '';
+  onTemplateSelect: (templateId: TemplateId) => void;
+  onContinue: () => void;
+  generating: boolean;
+}
+const TemplateSelector: React.FC<TemplateSelectorProps> = ({
+  selectedTemplate,
+  onTemplateSelect,
+  onContinue,
+  generating
 }) => {
   return (
     <div className="space-y-4 w-full">
@@ -764,7 +883,7 @@ const TemplateSelector = ({
                   ? "scale-105"
                   : "group-hover:scale-102"
               )}>
-                
+
                 {/* Modern Minimal */}
                 {/* {template.id === 'modern-minimal' && (
                   <div className="h-full bg-gradient-to-br from-gray- to-gray-700 flex items-center justify-center">
@@ -825,7 +944,7 @@ const TemplateSelector = ({
                       <div className="text-white text-[6px] font-medium opacity-80">ESTUDO DE CASO</div>
                       <div className="text-white text-[6px] font-medium opacity-80">BRANDS DECODED</div>
                     </div>
-                    
+
                     {/* Main Content */}
                     <div className="absolute inset-0 flex flex-col justify-center p-3">
                       {/* Bold Title */}
@@ -834,7 +953,7 @@ const TemplateSelector = ({
                         <div className="h-2 bg-black rounded w-4/5"></div>
                         <div className="h-2 bg-black rounded w-3/4"></div>
                       </div>
-                      
+
                       {/* Subtitle */}
                       <div className="space-y-1">
                         <div className="h-1 bg-white rounded w-3/4"></div>
@@ -916,10 +1035,10 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 }) => {
 
   const {
-      data: pages = [],
-      isLoading: loadingPages,
-      refetch: refetchPages,
-    } = useGetPages(projectId);
+    data: pages = [],
+    isLoading: loadingPages,
+    refetch: refetchPages,
+  } = useGetPages(projectId);
 
   const { mutate: createPage, isPending: pendingCreatePage } = useCreatePage(projectId);
 
@@ -1082,10 +1201,10 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       const mockPosts: InstagramPost[] = (posts.posts || []).map((post: any, i: number) => ({
         url: post.url || `https://instagram.com/p/${i}-${username}`,
         images: Array.isArray(post.images) ? post.images : ['/placeholder.svg'],
-        reel: post.reel ?? (i % 4 === 0),
-        carousel: post.carousel ?? (i % 3 === 0),
+        reel: typeof post.reel === "boolean" ? post.reel : (i % 4 === 0),
+        carousel: typeof post.carousel === "boolean" ? post.carousel : (i % 3 === 0),
         videoURL: post.videoURL,
-        transcription: post.transcription || ``,
+        transcription: post.transcription ? post.transcription : "",
         // likes: post.likes,
         // datetime: post.datetime
       }));
@@ -1215,6 +1334,66 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     }
   };
 
+//   const handleAddYouTubeSource = async (url: string) => {
+//   if (!url.trim() || sources.length >= 3) {
+//     toast.error('URL inválida ou limite de fontes atingido.');
+//     return;
+//   }
+
+//   // ADICIONAR: Importar e usar a função de limpeza
+//   // const { cleanYouTubeUrl } = require('@/features/youtube/use-youtube-transcript'); // ou o caminho correto
+//   // const cleanUrl = cleanYouTubeUrl(url.trim());
+//   // console.log('🔗 URL original:', url);
+//   // console.log('🔗 URL limpa:', cleanUrl);
+
+//   setLoadingState('sources', true);
+
+//   try {
+//     const response = await client.api.youtube.transcript.$post({
+//       json: {
+//         videoUrl: cleanUrl, // USAR URL LIMPA
+//         lang: 'pt',
+//         country: 'BR'
+//       }
+//     });
+
+//     if (!response.ok) {
+//       const errorData = await response.json();
+//       throw new Error(errorData.error || 'Erro ao obter transcrição');
+//     }
+
+//     const { data } = await response.json();
+
+//     const youtubeVideo: YouTubeVideo = {
+//       url: data.videoUrl,
+//       title: `Vídeo YouTube ${data.videoId}`,
+//       transcript: data.fullText,
+//       duration: data.totalDuration
+//     };
+
+//     const newSource: SourceData = {
+//       id: `youtube-${Date.now()}`,
+//       type: 'youtube',
+//       data: { url: cleanUrl, domain: 'youtube.com' }, // USAR URL LIMPA
+//       videos: [youtubeVideo]
+//     };
+
+//     setSources(prev => [...prev, newSource]);
+
+//     if (sources.length === 0) {
+//       setCompletedState('sources', true);
+//     }
+
+//     toast.success('Transcrição do YouTube obtida com sucesso!');
+
+//   } catch (error) {
+//     setErrorText('Erro ao obter transcrição do YouTube. Verifique a URL e tente novamente.');
+//     console.error('Error fetching YouTube transcript:', error);
+//   } finally {
+//     setLoadingState('sources', false);
+//   }
+// };
+
   const removeSource = (sourceId: string) => {
     setSources(prev => prev.filter(s => s.id !== sourceId));
     setSelectedPosts(prev => prev.filter(post => post.sourceId !== sourceId));
@@ -1306,19 +1485,21 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         subject,
         tone,
         format: selectedFormat,
-        selectedPosts: selectedPosts.map(post => ({
-          url: post.url,
-          type: post.type,
-          title: post.title,
-          // Campos opcionais baseados no tipo
-          ...(post.type === 'post' && {
-            transcription: post.transcription,
-            aiTranscription: post.aiTranscription || '',
-          }),
-          ...(post.type === 'article' && {
-            content: post.content,
-          }),
-        })),
+        selectedPosts: selectedPosts
+          .filter(post => post.type === 'post' || post.type === 'article')
+          .map(post => ({
+            url: post.url,
+            type: post.type,
+            title: post.title,
+            // Campos opcionais baseados no tipo
+            ...(post.type === 'post' && {
+              transcription: post.transcription,
+              aiTranscription: post.aiTranscription || '',
+            }),
+            ...(post.type === 'article' && {
+              content: post.content,
+            }),
+          })),
       };
 
       console.log('🚀 Payload para API:', payload);
@@ -1333,7 +1514,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         const errorData = await response.json().catch(() => ({
           error: "Erro de comunicação com a API"
         }));
-        throw new Error(errorData.error || `Erro HTTP ${response.status}`);
+        throw new Error(('error' in errorData ? errorData.error : undefined) || `Erro HTTP ${response.status}`);
       }
 
       // Processar resposta da API
@@ -1430,523 +1611,529 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   // 4. NOVA FUNÇÃO para processar perfil e criar páginas
   // Função para processar o conteúdo e criar as páginas do carrossel
-const handleProfileSubmitAndCreatePages = async () => {
-  if (!selectedTemplate || !generatedContent || !profileUsername || !profileImage) return;
+  const handleProfileSubmitAndCreatePages = async () => {
+    if (!selectedTemplate || !generatedContent || !profileUsername || !profileImage) return;
 
-  setGeneratingImages(true);
+    setGeneratingImages(true);
 
-  try {
-    // 1. Processar o conteúdo
-    const processedCards = processCarouselContent(generatedContent);
-    
-    console.log('🔄 Conteúdo processado:', processedCards);
-
-    // 2. Gerar as páginas com o template selecionado
-    const fabricPages = await generateFabricPagesWithBase64(
-      processedCards, 
-      selectedTemplate, 
-      {
-        username: profileUsername,
-        image: profileImage
-      }
-    );
-
-    console.log('🎨 Páginas geradas:', fabricPages);
-
-    // 3. ✅ CORREÇÃO: Criar as páginas SEQUENCIALMENTE
-    await createPagesSequentially(fabricPages);
-
-    const template = CAROUSEL_TEMPLATES.find(t => t.id === selectedTemplate);
-
-    toast.success('🎨 Carrossel criado com sucesso!', {
-      description: `${fabricPages.length} páginas criadas com template "${template?.name}"`,
-      duration: 5000,
-    });
-
-    // ✅ CORREÇÃO: Marcar como concluído e resetar estados
-    setCompletedState('template', true);
-    setExpandedSections(prev => ({ ...prev, template: false }));
-    setShowProfileForm(false);
-
-  } catch (error) {
-    console.error('❌ Erro ao criar carrossel:', error);
-    toast.error('💥 Erro ao criar carrossel', {
-      description: 'Tente novamente ou escolha outro template',
-      duration: 6000,
-    });
-  } finally {
-    // ✅ CORREÇÃO: Garantir que o loading seja resetado SEMPRE
-    setGeneratingImages(false);
-  }
-};
-
-// 🔧 NOVA FUNÇÃO: Criação sequencial de páginas (uma por vez)
-const createPagesSequentially = async (fabricPages: string[]) => {
-  console.log('🚀 Iniciando criação sequencial de páginas...');
-  
-  console.log(`📄 Total de páginas a serem criadas: ${fabricPages}`);
-  
-  for (let index = 0; index < fabricPages.length; index++) {
-    const fabricJson = fabricPages[index];
-    const pageNumber = index + 1;
-    
     try {
-      console.log(`📄 Criando página ${pageNumber}/${fabricPages.length}...`);
-      console.log(`Fabric JSON para página ${pageNumber}:`, fabricJson);
-      
-      // Criar página individual e aguardar conclusão
-      await createSinglePage(fabricJson, pageNumber);
-      
-      console.log(`✅ Página ${pageNumber} criada com sucesso`);
-      
-      // Pequeno delay para evitar sobrecarga da API
-      if (index < fabricPages.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
+      // 1. Processar o conteúdo
+      const processedCards = processCarouselContent(generatedContent);
+
+      console.log('🔄 Conteúdo processado:', processedCards);
+
+      // 2. Gerar as páginas com o template selecionado
+      const fabricPages = await generateFabricPagesWithBase64(
+        processedCards,
+        selectedTemplate,
+        {
+          username: profileUsername,
+          image: profileImage
+        }
+      );
+
+      console.log('🎨 Páginas geradas:', fabricPages);
+
+      // 3. ✅ CORREÇÃO: Criar as páginas SEQUENCIALMENTE
+      await createPagesSequentially(fabricPages);
+
+      const template = CAROUSEL_TEMPLATES.find(t => t.id === selectedTemplate);
+
+      toast.success('🎨 Carrossel criado com sucesso!', {
+        description: `${fabricPages.length} páginas criadas com template "${template?.name}"`,
+        duration: 5000,
+      });
+
+      // ✅ CORREÇÃO: Marcar como concluído e resetar estados
+      setCompletedState('template', true);
+      setExpandedSections(prev => ({ ...prev, template: false }));
+      setShowProfileForm(false);
+
     } catch (error) {
-      console.error(`❌ Erro ao criar página ${pageNumber}:`, error);
-      throw new Error(`Falha na criação da página ${pageNumber}: ${error.message}`);
-    }
-  }
-  
-  // Atualizar lista de páginas após todas serem criadas
-  await refetchPages();
-  console.log('🎉 Todas as páginas foram criadas sequencialmente!');
-};
-
-// 🔧 FUNÇÃO HELPER: Criar uma única página
-const createSinglePage = (fabricJson: string, pageNumber: number): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    // ✅ CORREÇÃO: Título único para cada página
-    const uniqueTitle = `Página ${pageNumber} - ${Date.now()}`;
-    
-    console.log("Fabric JSON para criação:", fabricJson);
-    
-    createPage({ 
-      height: 1080, 
-      width: 1080,
-      fabricState: fabricJson,
-      title: uniqueTitle // ✅ Título único para evitar duplicação
-    }, {
-      onSuccess: (data) => {
-        console.log(`✅ Página ${pageNumber} criada:`, data?.data?.id);
-        resolve(data);
-      },
-      onError: (error) => {
-        console.error(`❌ Erro ao criar página ${pageNumber}:`, error);
-        reject(error);
-      }
-    });
-  });
-};
-
-// Função para processar o conteúdo gerado
-const processCarouselContent = (content: any): string[] => {
-  const cards: string[] = [];
-  
-  // 1. Adicionar headline como primeiro card
-  if (content.headline && content.headline.trim()) {
-    cards.push(content.headline.trim());
-  }
-  
-  // 2. Processar os cards do conteúdo
-  if (content.cards && typeof content.cards === 'string') {
-    const cardsText = content.cards
-      .split('\n')
-      .map((line: string) => line.trim())
-      .filter((line: string) => line.length > 0)
-      .map((line: string) => {
-        // ✅ MELHORAMENTO: Regex mais robusta para remover numeração
-        return line
-          .replace(/^texto\s+\d+\s*[-–—]\s*/i, '') // Remove "texto X -"
-          .replace(/^\d+[\.\)]\s*/, '') // Remove "1." ou "1)"
-          .replace(/^[-–—•]\s*/, '') // Remove bullets
-          .trim();
-      })
-      .filter((line: string) => line.length > 10); // ✅ Filtrar textos muito curtos
-    
-    cards.push(...cardsText);
-  }
-  
-  // ✅ VALIDAÇÃO: Garantir que temos pelo menos 1 card
-  if (cards.length === 0) {
-    cards.push('Conteúdo do carrossel');
-  }
-  
-  console.log(`📝 Processados ${cards.length} cards:`, cards.map((c, i) => `${i + 1}. ${c.substring(0, 50)}...`));
-  
-  return cards;
-};
-
-
-// Função para gerar o template Fabric.js baseado no tipo selecionado
-const generateFabricTemplate = async (
-  text: string,
-  templateId: string,
-  profile: { username: string; image: string },
-  isFirstCard: boolean,
-  pageNumber: number,
-  totalPages: number
-) => {
-  const baseWidth = 1080;
-  const baseHeight = 1080;
-
-  const baseTemplate = {
-    version: "5.3.0",
-    objects: [],
-    clipPath: {
-      type: "rect",
-      version: "5.3.0",
-      originX: "left",
-      originY: "top",
-      left: 175.5,
-      top:  -286.5,
-      width: baseWidth,
-      height: baseHeight,
-      fill: "white",
-      stroke: null,
-      strokeWidth: 1,
-      scaleX: 1,
-      scaleY: 1,
-      angle: 0,
-      flipX: false,
-      flipY: false,
-      opacity: 1,
-      shadow: {
-        color: "rgba(0,0,0,0.8)",
-        blur: 5,
-        offsetX: 0,
-        offsetY: 0,
-        affectStroke: false,
-        nonScaling: false
-      },
-      visible: true,
-      selectable: false,
-      hasControls: false
+      console.error('❌ Erro ao criar carrossel:', error);
+      toast.error('💥 Erro ao criar carrossel', {
+        description: 'Tente novamente ou escolha outro template',
+        duration: 6000,
+      });
+    } finally {
+      // ✅ CORREÇÃO: Garantir que o loading seja resetado SEMPRE
+      setGeneratingImages(false);
     }
   };
 
-  // baseTemplate.objects.push();
+  // 🔧 NOVA FUNÇÃO: Criação sequencial de páginas (uma por vez)
+  const createPagesSequentially = async (fabricPages: string[]) => {
+    console.log('🚀 Iniciando criação sequencial de páginas...');
 
-  // Template específico baseado no ID
-  switch (templateId) {
-    case 'editorial-bold':
-      const fabric = await generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-      console.log(`📄 Template Editorial: `, JSON.stringify(fabric));
-      
-      return fabric;
-    
-    case 'modern-minimal':
-      return generateModernMinimalTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-    
-    case 'vibrant-creative':
-      return generateVibrantCreativeTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-    
-    case 'professional-corporate':
-      return generateProfessionalCorporateTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-    
-    case 'warm-personal':
-      return generateWarmPersonalTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-    
-    default:
-      return generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-  }
-};
+    console.log(`📄 Total de páginas a serem criadas: ${fabricPages}`);
 
-// Template Editorial Bold
-// const generateEditorialBoldTemplate = (
-//   baseTemplate: any,
-//   text: string,
-//   profile: { username: string; image: string },
-//   isFirstCard: boolean,
-//   pageNumber: number,
-//   totalPages: number
-// ) => {
+    for (let index = 0; index < fabricPages.length; index++) {
+      const fabricJson = fabricPages[index];
+      const pageNumber = index + 1;
 
-//   // Clona o baseTemplate para não modificar o objeto original
-//   const fabricTemplate = JSON.parse(JSON.stringify(baseTemplate));
+      try {
+        console.log(`📄 Criando página ${pageNumber}/${fabricPages.length}...`);
+        console.log(`Fabric JSON para página ${pageNumber}:`, fabricJson);
 
-//   // Define a largura padrão para os objetos dentro deste template
-//   const objectWidth = 1080; 
-//   const objectHeight = 1080; // Altura fixa para todos os objetos
-//   const padding = 60;
+        // Criar página individual e aguardar conclusão
+        await createSinglePage(fabricJson, pageNumber);
 
+        console.log(`✅ Página ${pageNumber} criada com sucesso`);
 
-//   // 1. 🔳 Retângulo de fundo com gradiente
-//   let gradientFill;
-//   if (isFirstCard) {
-//     // Primeira página: gradiente preto para branco
-//     gradientFill = {
-//       type: 'linear',
-//       coords: {
-//         x1: 0, y1: 0,
-//         x2: 0, y2: objectHeight // Coordenadas do gradiente baseadas no tamanho do objeto
-//       },
-//       colorStops: [
-//         { offset: 0, color: '#000000' },
-//         { offset: 1, color: '#ffffff' }
-//       ]
-//     };
-//   } else {
-//     // Páginas de conteúdo: gradiente azul para preto
-//     gradientFill = {
-//       type: 'linear',
-//       coords: {
-//         x1: 0, y1: 0,
-//         x2: objectWidth, y2: 1200
-//       },
-//       colorStops: [
-//         { offset: 0, color: '#1e40af' },
-//         { offset: 1, color: '#000000' }
-//       ]
-//     };
-//   }
+        // Pequeno delay para evitar sobrecarga da API
+        if (index < fabricPages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
 
-//   const backgroundRect = {
-//     type: "rect",
-//     version: "5.3.0",
-//     originX: "left",
-//     originY: "top",
-//     left: 0,
-//     top: 0,
-//     width: objectWidth, // Largura definida
-//     height: objectHeight,
-//     fill: gradientFill, // Usando o objeto de gradiente Fabric.js
-//     stroke: null,
-//     strokeWidth: 1,
-//     scaleX: 1,
-//     scaleY: 1,
-//     angle: 0,
-//     flipX: false,
-//     flipY: false,
-//     opacity: 1,
-//     shadow: null,
-//     visible: true,
-//     selectable: false, // Fundo geralmente não é selecionável
-//     hasControls: false
-//   };
-
-//   fabricTemplate.objects.push(backgroundRect);
-
-//   // 2. 👤 Profile Image (maior, no canto superior esquerdo) - apenas se NÃO for a primeira carta
-//   if (!isFirstCard && profile.image && profile.username && profile.image.startsWith('data:image/')) {
-//     const profileImage = {
-//       type: "image",
-//       version: "5.3.0",
-//       originX: "center",
-//       originY: "center",
-//       left: padding + 60,
-//       top: 80,
-//       width: 120,
-//       height: 120,
-//       fill: "rgb(0,0,0)",
-//       stroke: "rgba(255,255,255,1)",
-//       strokeWidth: 4,
-//       scaleX: 1,
-//       scaleY: 1,
-//       angle: 0,
-//       flipX: false,
-//       flipY: false,
-//       opacity: 1,
-//       shadow: null,
-//       visible: true,
-//       src: profile.image, // A imagem já deve ser base64 aqui
-//       // crossOrigin: "anonymous",
-//       // filters: [],
-//       selectable: true,
-//       hasControls: true
-//     };
-//     fabricTemplate.objects.push(profileImage);
-
-//     // Username (ao lado da imagem, maior)
-//     const usernameText = {
-//       type: "textbox",
-//       version: "5.3.0",
-//       originX: "left",
-//       originY: "center",
-//       left: 360,
-//       top: -180,
-//       width: 300,
-//       height: 60,
-//       fill: "rgba(255, 255, 255, 1)",
-//       fontFamily: "Arial Black",
-//       fontWeight: 700,
-//       fontSize: 24,
-//       text: `@${profile.username}`,
-//       textAlign: "left",
-//       lineHeight: 1.16,
-//       selectable: true,
-//       hasControls: true,
-//       editable: true
-//     };
-//     fabricTemplate.objects.push(usernameText);
-//   }
-
-//   const calculateFontSize = (text: string, isFirstCard: boolean) => {
-//   const length = text.length;
-//   if (isFirstCard) {
-//     if (length > 150) return 32;
-//     if (length > 100) return 38;
-//     if (length > 50) return 45;
-//     return 52;  // Max 52 em vez de 75
-//   } else {
-//     if (length > 200) return 28;
-//     if (length > 100) return 35;
-//     return 42;  // Max 42 em vez de 60
-//   }
-// };
-
-//   // 3. 📝 Texto principal (posicionado no centro-baixo)
-//   const fontSize = calculateFontSize(text, isFirstCard);
-//   const fontWeight = isFirstCard ? 800 : 600;  // Menos pesado
-
-//   // Posição do texto ajustada
-//   const textTop = isFirstCard ? 100 : 50; // Mais para baixo se for a primeira carta, senão um pouco mais acima
-
-  
-//   const mainText = {
-//     type: "textbox",
-//     version: "5.3.0",
-//     originX: "left",
-//     originY: "top",
-//     left: padding,
-//     top: isFirstCard ? 200 : 180,
-//     width: 1080 - (padding * 2),
-//     height: 600,
-//     fill: "rgba(255, 255, 255, 1)",
-//     fontFamily: "Arial Black",
-//     fontWeight: isFirstCard ? 900 : 700, // Corrigido: valor para isFirstCard true
-//     fontSize: fontSize,
-//     text: text.trim(),
-//     textAlign: isFirstCard ? "center" : "left",
-//     lineHeight: 1.2,
-//     selectable: true,
-//     hasControls: true,
-//     editable: true
-//   };
-//   fabricTemplate.objects.push(mainText);
-
-//   // 4. 📄 Indicador de página (canto inferior direito)
-//   const pageIndicator = {
-//     type: "textbox",
-//     version: "5.3.0",
-//     originX: "right",
-//     originY: "bottom",
-//     left: 1050,
-//     top: 880,
-//     width: 100,
-//     height: 30,
-//     fill: "rgba(255, 255, 255, 0.8)",
-//     fontFamily: "Arial",
-//     fontWeight: 500,
-//     fontSize: 16,
-//     text: `${pageNumber}/${totalPages}`,
-//     textAlign: "right",
-//     lineHeight: 1.16,
-//     selectable: true,
-//     hasControls: true,
-//     editable: true
-//   };
-//   fabricTemplate.objects.push(pageIndicator);
-
-//   return fabricTemplate;
-// };
-
-// 🔧 FUNÇÃO PARA CONVERTER IMAGEM URL PARA BASE64
-const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
-  try {
-    // Se já é base64, retornar como está
-    if (imageUrl.startsWith('data:image/')) {
-      return imageUrl;
+      } catch (error) {
+        console.error(`❌ Erro ao criar página ${pageNumber}:`, error);
+        if (error instanceof Error) {
+          throw new Error(`Falha na criação da página ${pageNumber}: ${error.message}`);
+        } else {
+          throw new Error(`Falha na criação da página ${pageNumber}: ${String(error)}`);
+        }
+      }
     }
 
-    // Tentar converter URL para base64
-    const response = await fetch(imageUrl);
-    const blob = await response.blob();
+    // Atualizar lista de páginas após todas serem criadas
+    await refetchPages();
+    console.log('🎉 Todas as páginas foram criadas sequencialmente!');
+  };
 
+  // 🔧 FUNÇÃO HELPER: Criar uma única página
+  const createSinglePage = (fabricJson: string, pageNumber: number): Promise<any> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+      // ✅ CORREÇÃO: Título único para cada página
+      const uniqueTitle = `Página ${pageNumber} - ${Date.now()}`;
+
+      console.log("Fabric JSON para criação:", fabricJson);
+
+      createPage({
+        height: 1080,
+        width: 1080,
+        fabricState: fabricJson,
+        title: uniqueTitle // ✅ Título único para evitar duplicação
+      }, {
+        onSuccess: (data: any) => {
+          console.log(`✅ Página ${pageNumber} criada:`, data?.data?.id);
+          resolve(data);
+        },
+        onError: (error) => {
+          console.error(`❌ Erro ao criar página ${pageNumber}:`, error);
+          reject(error);
+        }
+      });
     });
-  } catch (error) {
-    console.warn('Erro ao converter imagem para base64:', error);
-    return imageUrl; // Retornar URL original se falhar
-  }
-};
+  };
 
-// 🔧 FUNÇÃO MELHORADA PARA GERAR PÁGINAS COM BASE64
-const generateFabricPagesWithBase64 = async (
-  cards: string[],
-  templateId: string,
-  profile: { username: string; image: string }
-): Promise<string[]> => {
-  const fabricPages: string[] = [];
+  // Função para processar o conteúdo gerado
+  const processCarouselContent = (content: any): string[] => {
+    const cards: string[] = [];
 
-  // Converter imagem do perfil para base64 se necessário
-  let profileImageBase64 = profile.image;
-  if (profile.image && !profile.image.startsWith('data:image/')) {
-    try {
-      profileImageBase64 = await convertImageToBase64(profile.image);
-      console.log('✅ Imagem convertida para base64');
-    } catch (error) {
-      console.warn('⚠️ Falha ao converter imagem, usando URL original');
+    // 1. Adicionar headline como primeiro card
+    if (content.headline && content.headline.trim()) {
+      cards.push(content.headline.trim());
     }
-  }
 
-  for (let i = 0; i < cards.length; i++) {
-    const cardText = cards[i];
-    const isFirstCard = i === 0;
+    // 2. Processar os cards do conteúdo
+    if (content.cards && typeof content.cards === 'string') {
+      const cardsText = content.cards
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.length > 0)
+        .map((line: string) => {
+          // ✅ MELHORAMENTO: Regex mais robusta para remover numeração
+          return line
+            .replace(/^texto\s+\d+\s*[-–—]\s*/i, '') // Remove "texto X -"
+            .replace(/^\d+[\.\)]\s*/, '') // Remove "1." ou "1)"
+            .replace(/^[-–—•]\s*/, '') // Remove bullets
+            .trim();
+        })
+        .filter((line: string) => line.length > 10); // ✅ Filtrar textos muito curtos
 
-    // Chamar a função principal generateFabricTemplate
-    const fabricJson = await generateFabricTemplate(
-      cardText,
-      templateId, // Passar o templateId para a função principal
-      {
-        username: profile.username,
-        image: profileImageBase64
-      },
-      isFirstCard,
-      i + 1,
-      cards.length
-    );
+      cards.push(...cardsText);
+    }
 
-    console.log(`📄 Página ${i + 1}/${cards.length} gerada com template ${templateId}:`, JSON.stringify(fabricJson));
-    
+    // ✅ VALIDAÇÃO: Garantir que temos pelo menos 1 card
+    if (cards.length === 0) {
+      cards.push('Conteúdo do carrossel');
+    }
 
-    fabricPages.push(JSON.stringify(fabricJson));
-  }
+    console.log(`📝 Processados ${cards.length} cards:`, cards.map((c, i) => `${i + 1}. ${c.substring(0, 50)}...`));
 
-  return fabricPages;
-};
+    return cards;
+  };
 
 
-// Templates adicionais (você pode implementar depois)
-const generateModernMinimalTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
-  // Implementar template minimalista
-  return baseTemplate;
-};
+  // Função para gerar o template Fabric.js baseado no tipo selecionado
+  const generateFabricTemplate = async (
+    text: string,
+    templateId: string,
+    profile: { username: string; image: string },
+    isFirstCard: boolean,
+    pageNumber: number,
+    totalPages: number
+  ) => {
+    const baseWidth = 1080;
+    const baseHeight = 1080;
 
-const generateVibrantCreativeTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
-  // Implementar template criativo
-  return baseTemplate;
-};
+    const baseTemplate = {
+      version: "5.3.0",
+      objects: [],
+      clipPath: {
+        type: "rect",
+        version: "5.3.0",
+        originX: "left",
+        originY: "top",
+        left: 175.5,
+        top: -286.5,
+        width: baseWidth,
+        height: baseHeight,
+        fill: "white",
+        stroke: null,
+        strokeWidth: 1,
+        scaleX: 1,
+        scaleY: 1,
+        angle: 0,
+        flipX: false,
+        flipY: false,
+        opacity: 1,
+        shadow: {
+          color: "rgba(0,0,0,0.8)",
+          blur: 5,
+          offsetX: 0,
+          offsetY: 0,
+          affectStroke: false,
+          nonScaling: false
+        },
+        visible: true,
+        selectable: false,
+        hasControls: false
+      }
+    };
 
-const generateProfessionalCorporateTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
-  // Implementar template corporativo
-  return baseTemplate;
-};
+    // baseTemplate.objects.push();
 
-const generateWarmPersonalTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
-  // Implementar template pessoal
-  return baseTemplate;
-};
+    // Template específico baseado no ID
+    switch (templateId) {
+      case 'editorial-bold':
+        const fabric = await generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+        console.log(`📄 Template Editorial: `, JSON.stringify(fabric));
+
+        return fabric;
+
+      case 'modern-minimal':
+        return generateModernMinimalTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+
+      case 'vibrant-creative':
+        return generateVibrantCreativeTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+
+      case 'professional-corporate':
+        return generateProfessionalCorporateTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+
+      case 'warm-personal':
+        return generateWarmPersonalTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+
+      default:
+        return generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+    }
+  };
+
+  // Template Editorial Bold
+  // const generateEditorialBoldTemplate = (
+  //   baseTemplate: any,
+  //   text: string,
+  //   profile: { username: string; image: string },
+  //   isFirstCard: boolean,
+  //   pageNumber: number,
+  //   totalPages: number
+  // ) => {
+
+  //   // Clona o baseTemplate para não modificar o objeto original
+  //   const fabricTemplate = JSON.parse(JSON.stringify(baseTemplate));
+
+  //   // Define a largura padrão para os objetos dentro deste template
+  //   const objectWidth = 1080; 
+  //   const objectHeight = 1080; // Altura fixa para todos os objetos
+  //   const padding = 60;
+
+
+  //   // 1. 🔳 Retângulo de fundo com gradiente
+  //   let gradientFill;
+  //   if (isFirstCard) {
+  //     // Primeira página: gradiente preto para branco
+  //     gradientFill = {
+  //       type: 'linear',
+  //       coords: {
+  //         x1: 0, y1: 0,
+  //         x2: 0, y2: objectHeight // Coordenadas do gradiente baseadas no tamanho do objeto
+  //       },
+  //       colorStops: [
+  //         { offset: 0, color: '#000000' },
+  //         { offset: 1, color: '#ffffff' }
+  //       ]
+  //     };
+  //   } else {
+  //     // Páginas de conteúdo: gradiente azul para preto
+  //     gradientFill = {
+  //       type: 'linear',
+  //       coords: {
+  //         x1: 0, y1: 0,
+  //         x2: objectWidth, y2: 1200
+  //       },
+  //       colorStops: [
+  //         { offset: 0, color: '#1e40af' },
+  //         { offset: 1, color: '#000000' }
+  //       ]
+  //     };
+  //   }
+
+  //   const backgroundRect = {
+  //     type: "rect",
+  //     version: "5.3.0",
+  //     originX: "left",
+  //     originY: "top",
+  //     left: 0,
+  //     top: 0,
+  //     width: objectWidth, // Largura definida
+  //     height: objectHeight,
+  //     fill: gradientFill, // Usando o objeto de gradiente Fabric.js
+  //     stroke: null,
+  //     strokeWidth: 1,
+  //     scaleX: 1,
+  //     scaleY: 1,
+  //     angle: 0,
+  //     flipX: false,
+  //     flipY: false,
+  //     opacity: 1,
+  //     shadow: null,
+  //     visible: true,
+  //     selectable: false, // Fundo geralmente não é selecionável
+  //     hasControls: false
+  //   };
+
+  //   fabricTemplate.objects.push(backgroundRect);
+
+  //   // 2. 👤 Profile Image (maior, no canto superior esquerdo) - apenas se NÃO for a primeira carta
+  //   if (!isFirstCard && profile.image && profile.username && profile.image.startsWith('data:image/')) {
+  //     const profileImage = {
+  //       type: "image",
+  //       version: "5.3.0",
+  //       originX: "center",
+  //       originY: "center",
+  //       left: padding + 60,
+  //       top: 80,
+  //       width: 120,
+  //       height: 120,
+  //       fill: "rgb(0,0,0)",
+  //       stroke: "rgba(255,255,255,1)",
+  //       strokeWidth: 4,
+  //       scaleX: 1,
+  //       scaleY: 1,
+  //       angle: 0,
+  //       flipX: false,
+  //       flipY: false,
+  //       opacity: 1,
+  //       shadow: null,
+  //       visible: true,
+  //       src: profile.image, // A imagem já deve ser base64 aqui
+  //       // crossOrigin: "anonymous",
+  //       // filters: [],
+  //       selectable: true,
+  //       hasControls: true
+  //     };
+  //     fabricTemplate.objects.push(profileImage);
+
+  //     // Username (ao lado da imagem, maior)
+  //     const usernameText = {
+  //       type: "textbox",
+  //       version: "5.3.0",
+  //       originX: "left",
+  //       originY: "center",
+  //       left: 360,
+  //       top: -180,
+  //       width: 300,
+  //       height: 60,
+  //       fill: "rgba(255, 255, 255, 1)",
+  //       fontFamily: "Arial Black",
+  //       fontWeight: 700,
+  //       fontSize: 24,
+  //       text: `@${profile.username}`,
+  //       textAlign: "left",
+  //       lineHeight: 1.16,
+  //       selectable: true,
+  //       hasControls: true,
+  //       editable: true
+  //     };
+  //     fabricTemplate.objects.push(usernameText);
+  //   }
+
+  //   const calculateFontSize = (text: string, isFirstCard: boolean) => {
+  //   const length = text.length;
+  //   if (isFirstCard) {
+  //     if (length > 150) return 32;
+  //     if (length > 100) return 38;
+  //     if (length > 50) return 45;
+  //     return 52;  // Max 52 em vez de 75
+  //   } else {
+  //     if (length > 200) return 28;
+  //     if (length > 100) return 35;
+  //     return 42;  // Max 42 em vez de 60
+  //   }
+  // };
+
+  //   // 3. 📝 Texto principal (posicionado no centro-baixo)
+  //   const fontSize = calculateFontSize(text, isFirstCard);
+  //   const fontWeight = isFirstCard ? 800 : 600;  // Menos pesado
+
+  //   // Posição do texto ajustada
+  //   const textTop = isFirstCard ? 100 : 50; // Mais para baixo se for a primeira carta, senão um pouco mais acima
+
+
+  //   const mainText = {
+  //     type: "textbox",
+  //     version: "5.3.0",
+  //     originX: "left",
+  //     originY: "top",
+  //     left: padding,
+  //     top: isFirstCard ? 200 : 180,
+  //     width: 1080 - (padding * 2),
+  //     height: 600,
+  //     fill: "rgba(255, 255, 255, 1)",
+  //     fontFamily: "Arial Black",
+  //     fontWeight: isFirstCard ? 900 : 700, // Corrigido: valor para isFirstCard true
+  //     fontSize: fontSize,
+  //     text: text.trim(),
+  //     textAlign: isFirstCard ? "center" : "left",
+  //     lineHeight: 1.2,
+  //     selectable: true,
+  //     hasControls: true,
+  //     editable: true
+  //   };
+  //   fabricTemplate.objects.push(mainText);
+
+  //   // 4. 📄 Indicador de página (canto inferior direito)
+  //   const pageIndicator = {
+  //     type: "textbox",
+  //     version: "5.3.0",
+  //     originX: "right",
+  //     originY: "bottom",
+  //     left: 1050,
+  //     top: 880,
+  //     width: 100,
+  //     height: 30,
+  //     fill: "rgba(255, 255, 255, 0.8)",
+  //     fontFamily: "Arial",
+  //     fontWeight: 500,
+  //     fontSize: 16,
+  //     text: `${pageNumber}/${totalPages}`,
+  //     textAlign: "right",
+  //     lineHeight: 1.16,
+  //     selectable: true,
+  //     hasControls: true,
+  //     editable: true
+  //   };
+  //   fabricTemplate.objects.push(pageIndicator);
+
+  //   return fabricTemplate;
+  // };
+
+  // 🔧 FUNÇÃO PARA CONVERTER IMAGEM URL PARA BASE64
+  const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
+    try {
+      // Se já é base64, retornar como está
+      if (imageUrl.startsWith('data:image/')) {
+        return imageUrl;
+      }
+
+      // Tentar converter URL para base64
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.warn('Erro ao converter imagem para base64:', error);
+      return imageUrl; // Retornar URL original se falhar
+    }
+  };
+
+  // 🔧 FUNÇÃO MELHORADA PARA GERAR PÁGINAS COM BASE64
+  const generateFabricPagesWithBase64 = async (
+    cards: string[],
+    templateId: string,
+    profile: { username: string; image: string }
+  ): Promise<string[]> => {
+    const fabricPages: string[] = [];
+
+    // Converter imagem do perfil para base64 se necessário
+    let profileImageBase64 = profile.image;
+    if (profile.image && !profile.image.startsWith('data:image/')) {
+      try {
+        profileImageBase64 = await convertImageToBase64(profile.image);
+        console.log('✅ Imagem convertida para base64');
+      } catch (error) {
+        console.warn('⚠️ Falha ao converter imagem, usando URL original');
+      }
+    }
+
+    for (let i = 0; i < cards.length; i++) {
+      const cardText = cards[i];
+      const isFirstCard = i === 0;
+
+      // Chamar a função principal generateFabricTemplate
+      const fabricJson = await generateFabricTemplate(
+        cardText,
+        templateId, // Passar o templateId para a função principal
+        {
+          username: profile.username,
+          image: profileImageBase64
+        },
+        isFirstCard,
+        i + 1,
+        cards.length
+      );
+
+      console.log(`📄 Página ${i + 1}/${cards.length} gerada com template ${templateId}:`, JSON.stringify(fabricJson));
+
+
+      fabricPages.push(JSON.stringify(fabricJson));
+    }
+
+    return fabricPages;
+  };
+
+
+  // Templates adicionais (você pode implementar depois)
+  const generateModernMinimalTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
+    // Implementar template minimalista
+    return baseTemplate;
+  };
+
+  const generateVibrantCreativeTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
+    // Implementar template criativo
+    return baseTemplate;
+  };
+
+  const generateProfessionalCorporateTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
+    // Implementar template corporativo
+    return baseTemplate;
+  };
+
+  const generateWarmPersonalTemplate = (baseTemplate: any, text: string, profile: any, isFirstCard: boolean, pageNumber: number, totalPages: number) => {
+    // Implementar template pessoal
+    return baseTemplate;
+  };
 
   const handleCopy = async () => {
     if (generatedContent) {
-      await navigator.clipboard.writeText(generatedContent);
+      await navigator.clipboard.writeText(
+        `Headline: ${generatedContent.headline}\nCards:\n${generatedContent.cards}`
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -2057,34 +2244,34 @@ const generateWarmPersonalTemplate = (baseTemplate: any, text: string, profile: 
 
               </Card>
               <div className='mt-4 space-y-2'>
-              {/* // 6. COMPONENTE ATUALIZADO DA SEÇÃO DE TEMPLATE (substitua o ExpandableSection existente) */}
-              <ExpandableSection
-                title="6. Template do Carrossel"
-                icon={FileText}
-                expanded={!!expandedSections.template}
-                onToggle={() => toggleSection('template')}
-                completed={!!completed.template}
-                required
-                autoFocus={currentFocus === 'template'}
-              >
-                {!showProfileForm ? (
-                  <TemplateSelector
-                    selectedTemplate={selectedTemplate}
-                    onTemplateSelect={handleTemplateSelect}
-                    onContinue={handleTemplateSelectionAndCreatePages}
-                    generating={generatingImages}
-                  />
-                ) : (
-                  <ProfileInfoCollector
-                    username={profileUsername}
-                    profileImage={profileImage}
-                    onUsernameChange={setProfileUsername}
-                    onProfileImageChange={setProfileImage}
-                    onContinue={handleProfileSubmitAndCreatePages}
-                    loading={generatingImages}
-                  />
-                )}
-              </ExpandableSection>
+                {/* // 6. COMPONENTE ATUALIZADO DA SEÇÃO DE TEMPLATE (substitua o ExpandableSection existente) */}
+                <ExpandableSection
+                  title="6. Template do Carrossel"
+                  icon={FileText}
+                  expanded={!!expandedSections.template}
+                  onToggle={() => toggleSection('template')}
+                  completed={!!completed.template}
+                  required
+                  autoFocus={currentFocus === 'template'}
+                >
+                  {!showProfileForm ? (
+                    <TemplateSelector
+                      selectedTemplate={selectedTemplate}
+                      onTemplateSelect={handleTemplateSelect}
+                      onContinue={handleTemplateSelectionAndCreatePages}
+                      generating={generatingImages}
+                    />
+                  ) : (
+                    <ProfileInfoCollector
+                      username={profileUsername}
+                      profileImage={profileImage}
+                      onUsernameChange={setProfileUsername}
+                      onProfileImageChange={setProfileImage}
+                      onContinue={handleProfileSubmitAndCreatePages}
+                      loading={generatingImages}
+                    />
+                  )}
+                </ExpandableSection>
               </div>
 
 
@@ -2107,7 +2294,27 @@ const generateWarmPersonalTemplate = (baseTemplate: any, text: string, profile: 
                 onToggle={() => toggleSection('sources')}
                 completed={!!completed.sources}
                 autoFocus={currentFocus === 'sources'}>
-                <SourcesManager errorText={errorText} setErrorText={setErrorText} sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
+
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-700 mb-2">
+                    Você pode pular esta etapa e gerar conteúdo baseado apenas nas suas configurações.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-blue-600 border-blue-300 hover:bg-blue-100"
+                    onClick={() => {
+                      setCompletedState('sources', true);
+                      setCompletedState('posts', true);
+                    }}
+                  >
+                    ⏭️ Pular Referências
+                  </Button>
+                </div>
+
+                <SourcesManager 
+                // onAddYouTube={}
+                 errorText={errorText} setErrorText={setErrorText} sources={sources} onAddInstagram={handleAddInstagramSource} onAddBlog={handleAddBlogSource} onRemove={removeSource} loading={!!loading.sources} maxSources={3} />
               </ExpandableSection>
 
               {sources.length > 0 && (
