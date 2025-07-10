@@ -41,6 +41,8 @@ interface EditorProps {
 
 export const Editor = ({ initialData }: EditorProps) => {
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const [generatedContent, setGeneratedContent] = useState<{
   headline: string;
   cards: string;
@@ -99,13 +101,15 @@ export const Editor = ({ initialData }: EditorProps) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSave = useCallback(
     debounce(
-      (values: {
+     async (values: {
         json: string,
         height: number,
         width: number,
       }) => {
+        setIsSaving(true);
         // mutate(values);
-        updatePage({
+        try {
+        await updatePage({
           pageId: activePageId,
           data: {
             fabricState: values.json,
@@ -113,8 +117,11 @@ export const Editor = ({ initialData }: EditorProps) => {
             width: values.width,
           }
         });
+      } finally {
+        setIsSaving(false);
+      }
       },
-      500
+      200
     ), [updatePage, activePageId]);
 
 
@@ -182,13 +189,13 @@ export const Editor = ({ initialData }: EditorProps) => {
 
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
+    // const timeout = setTimeout(() => {
       if (editor?.loadJson && pageData?.fabricState) {
         editor.loadJson(pageData.fabricState);
       }
-    }, 0);
+    // }, 0);
 
-    return () => clearTimeout(timeout);
+    // return () => clearTimeout(timeout);
   }, [pageData.fabricState]);
 
   return (

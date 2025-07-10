@@ -17,6 +17,7 @@ export const useUpdatePage = (projectId: string) => {
     Error,
     { pageId: string; data: RequestType }
   >({
+    mutationKey: ["updatePage", projectId],
     mutationFn: async ({ pageId, data }) => {
       const response = await client.api.projects[":projectId"]["pages"][":pageId"].$patch({
         param: { projectId, pageId },

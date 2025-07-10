@@ -44,7 +44,7 @@ export const Navbar = ({
 }: NavbarProps) => {
   const data = useMutationState({
     filters: {
-      mutationKey: ["project", { id }],
+      mutationKey: ["updatePage", id],
       exact: true,
     },
     select: (mutation) => mutation.state.status,
