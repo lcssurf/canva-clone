@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToolSidebarClose } from '@/features/editor/components/tool-sidebar-close';
 import { ToolSidebarHeader } from '@/features/editor/components/tool-sidebar-header';
-import { generateEditorialBoldTemplate } from '@/lib/cards/createTemplate';
+import { generateEditorialBoldTemplate, generateTwitterTemplate } from '@/lib/cards/createTemplate';
 import { processCarouselContent } from '@/lib/cards/processContent'
 import {
   ChevronDown,
@@ -186,11 +186,18 @@ const CAROUSEL_TEMPLATES = [
   //   description: 'Design aconchegante e próximo para marcas pessoais',
   // },
   {
-    id: 'editorial-bold',
-    name: 'Editorial',
-    description: 'Design aconchegante e próximo para marcas pessoais',
+    id: 'twitter',
+    name: 'Twitter / X',
+    description: 'Design otimizado para Twitter, com foco em engajamento',
     featured: true
-  }
+  },
+  // {
+  //   id: 'editorial-bold',
+  //   name: 'Editorial',
+  //   description: 'Design aconchegante e próximo para marcas pessoais',
+  //   featured: false
+  // }
+
 ] as const;
 
 // --- Tipos Derivados das Constantes ---
@@ -895,12 +902,20 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 }) => {
   return (
     <div className="space-y-4 w-full">
-      <div className="text-center space-y-2">
-        <h3 className="font-semibold text-lg">Escolha seu Template</h3>
-        <p className="text-sm text-gray-600">
-          Selecione o estilo visual para seu carrossel
-        </p>
-      </div>
+
+      <div className="text-center space-y-3">
+  <div className="space-y-1">
+    <h3 className="font-bold text-xl text-gray-900">Escolha seu Template</h3>
+  </div>
+  
+  {/* Aviso de novos templates */}
+  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-full">
+    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+    <span className="text-sm font-medium text-blue-700">
+      Novos templates em breve
+    </span>
+  </div>
+</div>
 
       <div className="grid grid-cols-2 gap-2 w-full p-1">
         {CAROUSEL_TEMPLATES.map((template) => (
@@ -972,46 +987,95 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     </div>
                   </div>
                 )} */}
+                {/* Twitter Template - Baseado no estilo Editorial laranja */}
+                {template.id === 'twitter' && (
+                  <div className="h-full bg-white relative overflow-hidden">
+                    {/* Header com perfil */}
+                    <div className="absolute top-6 left-2 right-2 flex items-center space-x-1.5">
+                      {/* Profile Picture */}
+                      <div className="w-4 h-4 bg-blue-400 rounded-full opacity-90"></div>
 
-                {/* Editorial Bold - Novo template baseado nas imagens */}
-                {template.id === 'editorial-bold' && (
-                  <div className="h-full bg-gradient-to-br from-red-500 to-orange-500 relative overflow-hidden">
-                    {/* Header */}
-                    <div className="absolute top-2 left-2 right-2 flex justify-between">
-                      <div className="text-white text-[6px] font-medium opacity-80">ESTUDO DE CASO</div>
-                      <div className="text-white text-[6px] font-medium opacity-80">BRANDS DECODED</div>
+                      <div className='flex flex-col gap-0.5'>
+                        {/* Username line */}
+                        <div className="h-0.5 bg-black rounded w-10 opacity-90"></div>
+                        <div className="h-0.5 bg-slate-400 rounded w-10 opacity-90"></div>
+                      </div>
                     </div>
 
-                    {/* Main Content */}
-                    <div className="absolute inset-0 flex flex-col justify-center p-3">
-                      {/* Bold Title */}
+                    {/* Main Content Area */}
+                    <div className="absolute inset-0 flex flex-col justify-center p-2">
+                      {/* Tweet Text Lines - Preto como no editorial */}
                       <div className="space-y-1 mb-2">
+                        <div className="h-1.5 bg-black rounded w-full"></div>
+                        <div className="h-1.5 bg-black rounded w-4/5"></div>
+                        <div className="h-1.5 bg-black rounded w-3/4"></div>
+                      </div>
+
+                      {/* Subtitle/Second paragraph - Branco como no editorial */}
+                      <div className="space-y-0.5">
+                        <div className="h-0.5 bg-slate-400 rounded w-3/4 opacity-90"></div>
+                        <div className="h-0.5 bg-slate-400 rounded w-3/4 opacity-90"></div>
+                        <div className="h-0.5 bg-slate-400 rounded w-3/4 opacity-90"></div>
+                      </div>
+                    </div>
+
+                    {/* Media/Image Placeholder */}
+                    <div className="absolute bottom-8 left-2 right-2 h-6 bg-gradient-to-br from-blue-100 to-blue-200 rounded border border-gray-200">
+                      <div className="w-full h-full bg-gradient-to-t from-blue-500/20 to-transparent rounded flex items-center justify-center">
+                        {/* <div className="w-3 h-2 bg-blue-500/40 rounded"></div> */}
+                      </div>
+                    </div>
+                    {/* Media placeholder - Similar ao editorial
+                    <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-black/20 backdrop-blur-sm">
+                      <div className="w-full h-full bg-gradient-to-t from-black/40 to-transparent flex items-center justify-center">
+                        <div className="w-3 h-2 bg-white/60 rounded"></div>
+                      </div>
+                    </div> */}
+
+                    {/* Navigation dots - Igual ao editorial */}
+                    <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex space-x-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className={`w-0.5 h-0.5 rounded-full ${i === 0 ? 'bg-white' : 'bg-white/50'}`}></div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Editorial Bold - Novo template baseado nas imagens */}
+                {/* {template.id === 'editorial-bold' && (
+                  <div className="h-full bg-gradient-to-br from-red-500 to-orange-500 relative overflow-hidden"> */}
+                    {/* Header */}
+                    {/* <div className="absolute top-2 left-2 right-2 flex justify-between">
+                      <div className="text-white text-[6px] font-medium opacity-80">ESTUDO DE CASO</div>
+                      <div className="text-white text-[6px] font-medium opacity-80">BRANDS DECODED</div>
+                    </div> */}
+
+                    {/* Main Content */}
+                    {/* <div className="absolute inset-0 flex flex-col justify-center p-3"> */}
+                      {/* Bold Title */}
+                      {/* <div className="space-y-1 mb-2">
                         <div className="h-2 bg-black rounded w-full"></div>
                         <div className="h-2 bg-black rounded w-4/5"></div>
                         <div className="h-2 bg-black rounded w-3/4"></div>
-                      </div>
+                      </div> */}
 
                       {/* Subtitle */}
-                      <div className="space-y-1">
+                      {/* <div className="space-y-1">
                         <div className="h-1 bg-white rounded w-3/4"></div>
                         <div className="h-1 bg-white rounded w-2/3"></div>
                         <div className="h-1 bg-white rounded w-1/2"></div>
                       </div>
-                    </div>
+                    </div> */}
 
-                    {/* Bottom Image Placeholder */}
-                    <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-black/20 backdrop-blur-sm">
-                      <div className="w-full h-full bg-gradient-to-t from-black/40 to-transparent"></div>
-                    </div>
 
                     {/* Navigation dots */}
-                    <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                    {/* <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
                       {[...Array(5)].map((_, i) => (
                         <div key={i} className={`w-1 h-1 rounded-full ${i === 0 ? 'bg-white' : 'bg-white/50'}`}></div>
                       ))}
                     </div>
                   </div>
-                )}
+                )} */}
               </div>
 
               {/* Selection Overlay */}
@@ -1702,7 +1766,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
     try {
       // 1. Processar o conteúdo
-      const processedCards = processCarouselContent(generatedContent, {unlimited: true});
+      const processedCards = processCarouselContent(generatedContent, { unlimited: true });
 
       console.log('🔄 Conteúdo processado:', processedCards);
 
@@ -1902,9 +1966,11 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     switch (templateId) {
       case 'editorial-bold':
         const fabric = await generateEditorialBoldTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
-        console.log(`📄 Template Editorial: `, JSON.stringify(fabric));
-
         return fabric;
+
+      case 'twitter':
+        const fabricTwitter = await generateTwitterTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+        return fabricTwitter;
 
       case 'modern-minimal':
         return generateModernMinimalTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);

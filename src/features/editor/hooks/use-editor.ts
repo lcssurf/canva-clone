@@ -1,15 +1,15 @@
 import { fabric } from "fabric";
 import { useCallback, useState, useMemo, useRef } from "react";
 
-import { 
-  Editor, 
+import {
+  Editor,
   FILL_COLOR,
   STROKE_WIDTH,
   STROKE_COLOR,
   CIRCLE_OPTIONS,
   DIAMOND_OPTIONS,
   TRIANGLE_OPTIONS,
-  BuildEditorProps, 
+  BuildEditorProps,
   RECTANGLE_OPTIONS,
   EditorHookProps,
   STROKE_DASH_ARRAY,
@@ -20,11 +20,11 @@ import {
   JSON_KEYS,
 } from "@/features/editor/types";
 import { useHistory } from "@/features/editor/hooks/use-history";
-import { 
-  createFilter, 
-  downloadFile, 
+import {
+  createFilter,
+  downloadFile,
   isTextType,
-  transformText
+  transformText,
 } from "@/features/editor/utils";
 import { useHotkeys } from "@/features/editor/hooks/use-hotkeys";
 import { useClipboard } from "@/features/editor/hooks//use-clipboard";
@@ -104,24 +104,24 @@ const buildEditor = ({
 
     await transformText(dataUrl.objects);
     const fileString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(dataUrl, null, "\t"),
+      JSON.stringify(dataUrl, null, "\t")
     )}`;
     downloadFile(fileString, "json");
   };
 
   const loadJson = (json: string | object) => {
-    let data: any
+    let data: any;
 
     if (typeof json === "string") {
-    try {
-      data = JSON.parse(json);
-    } catch (err) {
-      console.error("Invalid JSON passed to loadJson:", err, json);
-      return;
+      try {
+        data = JSON.parse(json);
+      } catch (err) {
+        console.error("Invalid JSON passed to loadJson:", err, json);
+        return;
+      }
+    } else {
+      data = json;
     }
-  } else {
-    data = json;
-  }
 
     // data = JSON.parse(json);
 
@@ -131,9 +131,7 @@ const buildEditor = ({
   };
 
   const getWorkspace = () => {
-    return canvas
-    .getObjects()
-    .find((object) => object.name === "clip");
+    return canvas.getObjects().find((object) => object.name === "clip");
   };
 
   const center = (object: fabric.Object) => {
@@ -177,7 +175,7 @@ const buildEditor = ({
       const center = canvas.getCenter();
       canvas.zoomToPoint(
         new fabric.Point(center.left, center.top),
-        zoomRatio < 0.2 ? 0.2 : zoomRatio,
+        zoomRatio < 0.2 ? 0.2 : zoomRatio
       );
     },
     changeSize: (value: { width: number; height: number }) => {
@@ -234,7 +232,7 @@ const buildEditor = ({
         },
         {
           crossOrigin: "anonymous",
-        },
+        }
       );
     },
     delete: () => {
@@ -399,7 +397,7 @@ const buildEditor = ({
       });
 
       canvas.renderAll();
-      
+
       const workspace = getWorkspace();
       workspace?.sendToBack();
     },
@@ -413,6 +411,13 @@ const buildEditor = ({
       workspace?.sendToBack();
     },
     changeFontFamily: (value: string) => {
+      try {
+        document.fonts.load(`700 48px "${value}"`);
+      } catch (err) {
+        console.warn(
+          `Não foi possível garantir o carregamento da fonte: ${value}`
+        );
+      }
       setFontFamily(value);
       canvas.getActiveObjects().forEach((object) => {
         if (isTextType(object.type)) {
@@ -642,22 +647,16 @@ export const useEditor = ({
   const [fillColor, setFillColor] = useState(FILL_COLOR);
   const [strokeColor, setStrokeColor] = useState(STROKE_COLOR);
   const [strokeWidth, setStrokeWidth] = useState(STROKE_WIDTH);
-  const [strokeDashArray, setStrokeDashArray] = useState<number[]>(STROKE_DASH_ARRAY);
+  const [strokeDashArray, setStrokeDashArray] =
+    useState<number[]>(STROKE_DASH_ARRAY);
 
   useWindowEvents();
 
-  const { 
-    save, 
-    canRedo, 
-    canUndo, 
-    undo, 
-    redo,
-    canvasHistory,
-    setHistoryIndex,
-  } = useHistory({ 
-    canvas,
-    saveCallback
-  });
+  const { save, canRedo, canUndo, undo, redo, canvasHistory, setHistoryIndex } =
+    useHistory({
+      canvas,
+      saveCallback,
+    });
 
   const { copy, paste } = useClipboard({ canvas });
 
@@ -717,8 +716,7 @@ export const useEditor = ({
     }
 
     return undefined;
-  }, 
-  [
+  }, [
     canRedo,
     canUndo,
     undo,
@@ -777,9 +775,7 @@ export const useEditor = ({
       setCanvas(initialCanvas);
       setContainer(initialContainer);
 
-      const currentState = JSON.stringify(
-        initialCanvas.toJSON(JSON_KEYS)
-      );
+      const currentState = JSON.stringify(initialCanvas.toJSON(JSON_KEYS));
       canvasHistory.current = [currentState];
       setHistoryIndex(0);
     },

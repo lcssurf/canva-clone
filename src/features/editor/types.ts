@@ -40,6 +40,7 @@ export const filters = [
 ];
 
 export const fonts = [
+  "Poppins",
   "Arial",
   "Arial Black",
   "Verdana",
