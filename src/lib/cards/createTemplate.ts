@@ -409,7 +409,8 @@ export async function generateTwitterTemplate(
   profile: { username: string; image: string },
   isFirstCard: boolean,
   pageNumber: number,
-  totalPages: number
+  totalPages: number,
+  link: string
 ): Promise<any> {
   // Define a largura padrão para os objetos dentro deste template
   const objectWidth = 1080;
@@ -807,8 +808,7 @@ export async function generateTwitterTemplate(
 
   pushSmartText(fabricTemplate, text.trim());
 
-  const image =
-    "https://miro.medium.com/v2/resize:fit:1400/1*FB9KwfU1r-fhk45LxHbx1w.png";
+  const image = String(link);
   const processedImageBase64 = await preprocessWithPica(
     image,
     objectWidth - padding * 2,

@@ -133,10 +133,12 @@ interface AiSidebarProps {
   generatedContent: {
     headline: string;
     cards: string;
+    links?: string[];
   } | null;
   setGeneratedContent: (content: {
     headline: string;
     cards: string;
+    links?: string[];
   } | null) => void;
 }
 
@@ -205,7 +207,7 @@ type GoalValue = typeof GOALS[number]['value'];
 type ToneValue = typeof TONES[number]['value'];
 type FormatValue = typeof FORMATS[number]['value'];
 
-const STEPS = ['sources', 'posts', 'goal', 'niche', 'audience', 'subject', 'tone', 'template'] as const;
+const STEPS = ['sources', 'posts', 'goal', 'niche', 'audience', 'subject', 'template', 'tone'] as const;
 type SectionName = typeof STEPS[number];
 // Adicionar tipo para template
 type TemplateId = typeof CAROUSEL_TEMPLATES[number]['id'];
@@ -904,18 +906,18 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     <div className="space-y-4 w-full">
 
       <div className="text-center space-y-3">
-  <div className="space-y-1">
-    <h3 className="font-bold text-xl text-gray-900">Escolha seu Template</h3>
-  </div>
-  
-  {/* Aviso de novos templates */}
-  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-full">
-    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-    <span className="text-sm font-medium text-blue-700">
-      Novos templates em breve
-    </span>
-  </div>
-</div>
+        <div className="space-y-1">
+          <h3 className="font-bold text-xl text-gray-900">Escolha seu Template</h3>
+        </div>
+
+        {/* Aviso de novos templates */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-full">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          <span className="text-sm font-medium text-blue-700">
+            Novos templates em breve
+          </span>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 w-full p-1">
         {CAROUSEL_TEMPLATES.map((template) => (
@@ -1044,23 +1046,23 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 {/* Editorial Bold - Novo template baseado nas imagens */}
                 {/* {template.id === 'editorial-bold' && (
                   <div className="h-full bg-gradient-to-br from-red-500 to-orange-500 relative overflow-hidden"> */}
-                    {/* Header */}
-                    {/* <div className="absolute top-2 left-2 right-2 flex justify-between">
+                {/* Header */}
+                {/* <div className="absolute top-2 left-2 right-2 flex justify-between">
                       <div className="text-white text-[6px] font-medium opacity-80">ESTUDO DE CASO</div>
                       <div className="text-white text-[6px] font-medium opacity-80">BRANDS DECODED</div>
                     </div> */}
 
-                    {/* Main Content */}
-                    {/* <div className="absolute inset-0 flex flex-col justify-center p-3"> */}
-                      {/* Bold Title */}
-                      {/* <div className="space-y-1 mb-2">
+                {/* Main Content */}
+                {/* <div className="absolute inset-0 flex flex-col justify-center p-3"> */}
+                {/* Bold Title */}
+                {/* <div className="space-y-1 mb-2">
                         <div className="h-2 bg-black rounded w-full"></div>
                         <div className="h-2 bg-black rounded w-4/5"></div>
                         <div className="h-2 bg-black rounded w-3/4"></div>
                       </div> */}
 
-                      {/* Subtitle */}
-                      {/* <div className="space-y-1">
+                {/* Subtitle */}
+                {/* <div className="space-y-1">
                         <div className="h-1 bg-white rounded w-3/4"></div>
                         <div className="h-1 bg-white rounded w-2/3"></div>
                         <div className="h-1 bg-white rounded w-1/2"></div>
@@ -1068,8 +1070,8 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     </div> */}
 
 
-                    {/* Navigation dots */}
-                    {/* <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                {/* Navigation dots */}
+                {/* <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
                       {[...Array(5)].map((_, i) => (
                         <div key={i} className={`w-1 h-1 rounded-full ${i === 0 ? 'bg-white' : 'bg-white/50'}`}></div>
                       ))}
@@ -1165,6 +1167,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   const [generatedContentRaw, setGeneratedContentRaw] = useState<{
     headline: string;
     cards: string;
+    links: string[];
   } | null>(null);
 
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateId | ''>('');
@@ -1663,8 +1666,14 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       const { data } = await response.json();
 
       if (data.success && data.content) {
-        setGeneratedContent(data.content);
-        setGeneratedContentRaw(data.content)
+
+        const contentWithLinks = {
+          ...data.content,
+          links: data.content.links || [] // Garantir que links seja sempre um array
+        };
+
+        setGeneratedContent(contentWithLinks);
+        setGeneratedContentRaw(contentWithLinks)
 
         // 🎯 NOVO: Avançar para seleção de template
         setCompletedState('template', false); // Resetar se necessário
@@ -1777,7 +1786,9 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         {
           username: profileUsername,
           image: profileImage
-        }
+        },
+        generatedContent.links || []
+        
       );
 
       console.log('🎨 Páginas geradas:', fabricPages);
@@ -1920,7 +1931,8 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     profile: { username: string; image: string },
     isFirstCard: boolean,
     pageNumber: number,
-    totalPages: number
+    totalPages: number,
+    link: string
   ) => {
     const baseWidth = 1080;
     const baseHeight = 1080;
@@ -1969,7 +1981,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         return fabric;
 
       case 'twitter':
-        const fabricTwitter = await generateTwitterTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages);
+        const fabricTwitter = await generateTwitterTemplate(baseTemplate, text, profile, isFirstCard, pageNumber, totalPages, link);
         return fabricTwitter;
 
       case 'modern-minimal':
@@ -2017,7 +2029,8 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   const generateFabricPagesWithBase64 = async (
     cards: string[],
     templateId: string,
-    profile: { username: string; image: string }
+    profile: { username: string; image: string },
+    links: string[] = [],
   ): Promise<string[]> => {
     const fabricPages: string[] = [];
 
@@ -2035,6 +2048,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     for (let i = 0; i < cards.length; i++) {
       const cardText = cards[i];
       const isFirstCard = i === 0;
+      const link = links[i] || '';
 
       // Chamar a função principal generateFabricTemplate
       const fabricJson = await generateFabricTemplate(
@@ -2046,7 +2060,8 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         },
         isFirstCard,
         i + 1,
-        cards.length
+        cards.length,
+        link
       );
 
       console.log(`📄 Página ${i + 1}/${cards.length} gerada com template ${templateId}:`, JSON.stringify(fabricJson));
@@ -2114,7 +2129,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
   };
 
   // Condições de "pronto para gerar"
-  const canGenerate = goal && niche && audience && subject && tone.length > 0 && selectedPosts.length > 0;
+  const canGenerate = goal && niche && audience && subject && selectedTemplate && profileUsername && profileImage && tone.length > 0 && selectedPosts.length > 0;
 
   const handleNicheAndAudienceContinue = () => {
     // Verifica se ambos os campos estão preenchidos
@@ -2343,11 +2358,84 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                     </div>
                   </ExpandableSection>
 
-                  <ExpandableSection title="5. Assunto e Tom de Voz" icon={MessageSquare} expanded={!!expandedSections.subject || !!expandedSections.tone} onToggle={() => toggleSection('subject')} completed={!!completed.subject && !!completed.tone} required autoFocus={currentFocus === 'subject' || currentFocus === 'tone'}>
+                  <ExpandableSection
+                    title="5. Assunto Específico"
+                    icon={MessageSquare}
+                    expanded={!!expandedSections.subject}
+                    onToggle={() => toggleSection('subject')}
+                    completed={!!completed.subject}
+                    required
+                    autoFocus={currentFocus === 'subject'}
+                  >
                     <div className="space-y-4">
                       <label className="text-sm font-medium">Assunto Específico</label>
-                      <Textarea placeholder='Ex: "5 erros comuns ao investir em ações"' value={subject} onChange={(e) => setSubject(e.target.value)} onBlur={handleSubjectContinue} rows={3} />
+                      <Textarea
+                        placeholder='Ex: "5 erros comuns ao investir em ações"'
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        rows={3}
+                      />
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          if (subject.trim()) {
+                            setCompletedState('subject', true);
+                          }
+                        }}
+                        disabled={!subject.trim()}
+                      >
+                        Continuar
+                      </Button>
+                    </div>
+                  </ExpandableSection>
 
+                  <ExpandableSection
+                    title="6. Template do Carrossel"
+                    icon={FileText}
+                    expanded={!!expandedSections.template}
+                    onToggle={() => toggleSection('template')}
+                    completed={!!completed.template}
+                    required
+                    autoFocus={currentFocus === 'template'}
+                  >
+                    {!showProfileForm ? (
+                      <TemplateSelector
+                        selectedTemplate={selectedTemplate}
+                        onTemplateSelect={handleTemplateSelect}
+                        onContinue={() => {
+                          if (selectedTemplate) {
+                            setShowProfileForm(true);
+                          }
+                        }}
+                        generating={false}
+                      />
+                    ) : (
+                      <ProfileInfoCollector
+                        username={profileUsername}
+                        profileImage={profileImage}
+                        onUsernameChange={setProfileUsername}
+                        onProfileImageChange={setProfileImage}
+                        onContinue={() => {
+                          if (profileUsername && profileImage) {
+                            setCompletedState('template', true);
+                          }
+                        }}
+                        loading={false}
+                      />
+                    )}
+                  </ExpandableSection>
+
+                  {/* Seção 7: Tom de Voz (NOVA) */}
+                  <ExpandableSection
+                    title="7. Tom de Voz"
+                    icon={MessageSquare}
+                    expanded={!!expandedSections.tone}
+                    onToggle={() => toggleSection('tone')}
+                    completed={!!completed.tone}
+                    required
+                    autoFocus={currentFocus === 'tone'}
+                  >
+                    <div className="space-y-4">
                       <label className="text-sm font-medium">Tom de Voz (selecione um ou mais)</label>
                       <div className="grid grid-cols-2 gap-2">
                         {TONES.map((toneOption) => (
@@ -2357,42 +2445,26 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                           </div>
                         ))}
                       </div>
-                      {tone.length > 0 && <Button onClick={handleToneContinue} disabled={generating || isLoading} className="w-full">
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            Transcrevendo... Aguarde...
-                          </>
-                        ) : generating ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            Gerando conteúdo...
-                          </>
-                        ) : (
-                          "🚀 Gerar Conteúdo"
-                        )}
-                      </Button>}
+                      {tone.length > 0 && (
+                        <Button onClick={handleToneContinue} disabled={generating || isLoading} className="w-full">
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Transcrevendo... Aguarde...
+                            </>
+                          ) : generating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Gerando conteúdo...
+                            </>
+                          ) : (
+                            "🚀 Gerar Conteúdo"
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </ExpandableSection>
 
-                  {/* {canGenerate && (
-                    <ExpandableSection title="6. Formato e Geração" icon={FileText} expanded={!!expandedSections.format} onToggle={() => toggleSection('format')} completed={!!completed.format} required autoFocus={currentFocus === 'format'}>
-                      <div className="space-y-3">
-                        <p className="text-sm text-center text-green-600 font-bold">Tudo pronto! Escolha o formato para gerar.</p>
-                        {FORMATS.map((formatOption) => (
-                          <Card key={formatOption.value} className={cn("cursor-pointer transition-all hover:shadow-md", format === formatOption.value && "ring-2 ring-blue-500")} onClick={() => handleFormatAndGenerate(formatOption.value)}>
-                            <CardContent className="p-3 flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <span className="text-lg">{formatOption.emoji}</span>
-                                <span className="text-sm font-medium">{formatOption.label}</span>
-                              </div>
-                              {'featured' in formatOption && formatOption.featured && (<Badge>Destaque</Badge>)}
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </ExpandableSection>
-                  )} */}
                 </>
               )}
             </>
