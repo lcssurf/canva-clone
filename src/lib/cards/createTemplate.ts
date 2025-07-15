@@ -1,4 +1,5 @@
 import Pica from "pica";
+import { createSimpleFallback, processImageSmart } from "./processImage";
 
 export async function generateEditorialBoldTemplate(
   baseTemplate: any,
@@ -203,7 +204,7 @@ export async function generateEditorialBoldTemplate(
     profile.image.startsWith("data:image/")
   ) {
     // Foto de perfil, preenchendo todo o círculo
-    const processedBase64 = await preprocessWithPica(profile.image, 150);
+    const processedBase64 = await processImageSmart(profile.image, 150);
     // console.log("Processed Base64:", processedBase64);
 
     const img = new Image();
@@ -519,7 +520,7 @@ export async function generateTwitterTemplate(
   console.log("Fabric Template with white background:", fabricTemplate);
 
   // Foto de perfil, preenchendo todo o círculo
-  const processedBase64 = await preprocessWithPica(profile.image, 200);
+  const processedBase64 = await processImageSmart(profile.image, 200);
   const img = new Image();
   img.src = processedBase64;
   await img.decode();
@@ -580,7 +581,7 @@ export async function generateTwitterTemplate(
 
   const verifiedIconUrl =
     "https://miro.medium.com/v2/resize:fit:1400/1*FB9KwfU1r-fhk45LxHbx1w.png";
-  const processedVerifiedBase64 = await preprocessWithPica(verifiedIconUrl, 50);
+  const processedVerifiedBase64 = await processImageSmart(verifiedIconUrl, 50);
 
   const verifiedIcon = new Image();
   verifiedIcon.src = processedVerifiedBase64;
@@ -808,18 +809,24 @@ export async function generateTwitterTemplate(
 
   pushSmartText(fabricTemplate, text.trim());
 
-  const image = String(link);
-  const processedImageBase64 = await preprocessWithPica(
-    image,
-    objectWidth - padding * 2,
-    435
-  );
+  try {
+    const image = String(link);
+  console.log("Image link for Twitter template:", image);
+  const processedImageBase64 = await processImageSmart(image, 880, 495, true);
+  console.log("Processed Image Base64:", processedImageBase64);
+  
+  // console.log("Original 'link' passed to processImageSmart:", image.substring(0, 100) + "...", "Length:", image.length);
+  // const processedImageBase64 = await processImageSmart(
+  //   image,
+  //   objectWidth - padding * 2,
+  //   435
+  // );
 
-  const imageIcon = new Image();
-  imageIcon.src = processedImageBase64;
-  await imageIcon.decode();
+  // const imageIcon = new Image();
+  // imageIcon.src = processedImageBase64;
+  // await imageIcon.decode();
 
-  console.log("Processed Image Icon Base64:", processedImageBase64);
+  // console.log("Processed Image Icon Base64:", imageIcon);
 
   const postImage = {
     type: "image",
@@ -828,8 +835,8 @@ export async function generateTwitterTemplate(
     originY: "top",
     left: 752.5 + padding,
     top: -215.5 + 750,
-    width: imageIcon.naturalWidth,
-    height: imageIcon.naturalHeight,
+    width: 880,//imageIcon.naturalWidth,
+    height: 495,//imageIcon.naturalHeight,
     fill: "rgb(0,0,0)",
     stroke: null,
     strokeWidth: 0,
@@ -863,71 +870,64 @@ export async function generateTwitterTemplate(
   };
   fabricTemplate.objects.push(postImage);
 
+  } catch (error) {
+
+    const fallbackSrc = createSimpleFallback(880, 495);
+    const postImage = {
+    type: "image",
+    version: "5.3.0",
+    originX: "left",
+    originY: "top",
+    left: 752.5 + padding,
+    top: -215.5 + 750,
+    width: 880,//imageIcon.naturalWidth,
+    height: 495,//imageIcon.naturalHeight,
+    fill: "rgb(0,0,0)",
+    stroke: null,
+    strokeWidth: 0,
+    strokeDashArray: null,
+    strokeLineCap: "butt",
+    strokeDashOffset: 0,
+    strokeLineJoin: "miter",
+    strokeUniform: false,
+    strokeMiterLimit: 4,
+    scaleX: 1,
+    scaleY: 1,
+    angle: 0,
+    flipX: false,
+    flipY: false,
+    opacity: 1,
+    shadow: null,
+    visible: true,
+    backgroundColor: "",
+    fillRule: "nonzero",
+    paintFirst: "fill",
+    globalCompositeOperation: "source-over",
+    skewX: 0,
+    skewY: 0,
+    cropX: 0,
+    cropY: 0,
+    selectable: true,
+    hasControls: true,
+    src: fallbackSrc, // A imagem já deve ser base64 aqui
+    crossOrigin: "anonymous",
+    filters: [],
+  };
+  fabricTemplate.objects.push(postImage);
+
+  }
+  
+
   return fabricTemplate;
 }
 /**
- * Central crop + resize para um square de `size` px.
- * @param {string} base64 — sua imagem original
- * @param {number} size — ex: 120
- * @returns {Promise<string>} — novo base64 já 120×120
+ * Realiza um crop central e redimensiona uma imagem, com opção de máscara circular.
+ * A função é robusta e aceita Data URL, base64 puro, ou um link externo (https://...).
+ * @param {string} imageSource - A imagem original (Data URL, base64 puro, ou URL externa).
+ * @param {number} sizeOrW - A largura final (ou o lado, se for um quadrado). Ex: 120.
+ * @param {number} [h] - A altura final. Se fornecida, a imagem será retangular.
+ * @returns {Promise<string>} - A nova imagem como uma Data URL completa (ex: "data:image/png;base64,...").
  */
-async function preprocessWithPica(
-  base64: string,
-  sizeOrW: number = 120,
-  h?: number
-): Promise<string> {
-  // 1) Carrega a imagem
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.src = base64;
-  await img.decode();
-
-  // 2) Crop central num offscreen canvas
-  const sideW =
-    typeof h === "number"
-      ? sizeOrW
-      : Math.min(img.naturalWidth, img.naturalHeight);
-  const sideH = typeof h === "number" ? h : sideW;
-  const sx = (img.naturalWidth - sideW) / 2;
-  const sy = (img.naturalHeight - sideH) / 2;
-  const cropCanvas = new OffscreenCanvas(sideW, sideH);
-  const cropCtx = cropCanvas.getContext("2d");
-  if (!cropCtx) {
-    throw new Error("Failed to get 2D context for cropCanvas");
-  }
-  cropCtx.drawImage(img, sx, sy, sideW, sideH, 0, 0, sideW, sideH);
-
-  // 3) Redimensiona primeiro com Pica
-  const targetW = typeof h === "number" ? sizeOrW : sizeOrW;
-  const targetH = typeof h === "number" ? h : sizeOrW;
-  const resizedCanvas = new OffscreenCanvas(targetW, targetH);
-  await Pica().resize(cropCanvas, resizedCanvas);
-
-  // 4) Cria o canvas final com máscara circular só se for quadrado
-  const finalCanvas = new OffscreenCanvas(targetW, targetH);
-  const finalCtx = finalCanvas.getContext("2d");
-
-  if (targetW === targetH) {
-    // Aplica a máscara circular
-    finalCtx.save();
-    finalCtx.beginPath();
-    finalCtx.arc(targetW / 2, targetH / 2, targetW / 2, 0, Math.PI * 2);
-    finalCtx.clip();
-    finalCtx.drawImage(resizedCanvas, 0, 0);
-    finalCtx.restore();
-  } else {
-    // Sem máscara se não for quadrado
-    finalCtx.drawImage(resizedCanvas, 0, 0);
-  }
-
-  // 5) Converte para base64
-  const blob = await finalCanvas.convertToBlob({ type: "image/png" });
-  return new Promise<string>((resolve) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result as string);
-    fr.readAsDataURL(blob);
-  });
-}
 
 // =======================================================================
 // NOVA FUNÇÃO AUXILIAR - SEM DEPENDÊNCIA DE CANVAS
@@ -990,176 +990,204 @@ function estimateTextboxHeight(
 /**
  * Gera e adiciona ao fabricTemplate dois objetos "textbox" (título e subtítulo),
  * ajustando dinamicamente o fontSize para que o texto completo caiba em uma altura máxima.
+ * A função agora também divide subtítulos muito longos ao meio, inserindo uma linha em branco.
  * Não requer uma instância de `fabric.Canvas`.
- * @param fabricTemplate O objeto de template do Fabric.js ao qual os textboxes serão adicionados.
+ *
+ * @param fabricTemplate O objeto de template do Fabric.js ao qual as caixas de texto serão adicionadas.
  * @param fullText O texto completo a ser dividido e formatado.
  */
 function pushSmartText(fabricTemplate: { objects: any[] }, fullText: string) {
     // --- Constantes de Layout ---
-  const padding = 100;
-  const left = 752.5 + padding;
-  
-  // 1) Primeiro, verifica se há subtexto
-  const sentences = fullText.split(/(?<=\.\s)/);
-  const headlineText = (sentences.shift() || "").trim();
-  const subText = sentences.join("").trim();
-  
-  // Ajusta topBase baseado na presença de subtexto
-  const baseTop = -215.5 + (padding * 2) + 200 + 75; // 259.5
-  const topBase = subText ? baseTop - 50 : baseTop; // -50px se houver subtexto
-  const width = 1080 - padding * 2; // 880px
-  
-  // ALTERAÇÃO: Definir limites específicos para cada texto
-  const maxHeightPerText = 300; // Máximo 300px por texto
-  const maxTotalHeight = 600;   // Máximo 600px total
-  const gap = 20; // Espaço entre título e subtítulo
-  const minFontSize = 16; // Reduzido para dar mais flexibilidade
-  
-  // --- Valores Iniciais ---
-  let initialHeadSz = 48;
-  let initialSubSz = 32;
+    const padding = 100;
+    const left = 752.5 + padding;
+    // 1) Primeiro, verifique se há subtexto
+    const frases = fullText.split(/(?<=\.\s)/);
+    const headlineText = (frases.shift() || "").trim();
+    // ALTERAÇÃO: Mudou de 'const' para 'let' para permitir a modificação
+    let subText = frases.join("").trim();
 
-  let headSz = initialHeadSz;
-  let subSz = subText ? initialSubSz : 0;
+    // Ajusta topBase baseado na presença de subtexto
+    const baseTop = -215.5 + (padding * 2) + 200 + 75; // 259.5
+    const topBase = subText ? baseTop - 50 : baseTop; // -50px se houver subtexto
+    const width = 1080 - padding * 2; // 880px
+    const maxHeightPerText = 300;
+    const maxTotalHeight = 600;
+    const gap = 20; // Espaço entre título e subtítulo
+    const minFontSize = 16;
 
-  // 2) NOVA LÓGICA: Ajustar cada texto individualmente primeiro
-  // Ajusta o título para caber em 300px
-  while (headSz > minFontSize) {
-    const headH = estimateTextboxHeight(headlineText, headSz, 900, width, 1.16);
-    if (headH <= maxHeightPerText) {
-      break; // Título cabe em 300px
+    // --- Valores Iniciais ---
+    let initialHeadSz = 48;
+    let initialSubSz = 32;
+
+    // --- NOVO: Lógica para dividir parágrafos longos ---
+    if (subText) {
+        // Estima a altura do subtítulo com a fonte inicial para decidir se é "longo"
+        // Assumindo que a função `estimateTextboxHeight` está disponível no escopo
+        const estimatedInitialHeight = estimateTextboxHeight(subText, initialSubSz, 400, width, 1.2);
+
+        // Se a altura estimada ultrapassar o máximo, divida o parágrafo.
+        // Adicionamos uma pequena margem (ex: > maxHeightPerText) para acionar a divisão.
+        if (estimatedInitialHeight > maxHeightPerText) {
+            console.log("Subtítulo longo detectado. Dividindo ao meio.");
+            const middleIndex = Math.floor(subText.length / 2);
+            // Procura o espaço mais próximo (e anterior) ao meio do texto para evitar quebrar palavras
+            let splitIndex = subText.lastIndexOf(' ', middleIndex);
+
+            // Se não houver espaço (texto muito estranho com uma única palavra longa), divide no meio
+            if (splitIndex === -1) {
+                splitIndex = middleIndex;
+            }
+
+            const part1 = subText.substring(0, splitIndex).trim();
+            const part2 = subText.substring(splitIndex).trim();
+
+            // Remonta o subtítulo com uma linha em branco entre as duas partes
+            subText = `${part1}\n\n${part2}`;
+        }
     }
-    headSz--;
-  }
+    // --- FIM DA NOVA LÓGICA ---
 
-  // Ajusta o subtítulo para caber em 300px (se existir)
-  if (subText) {
-    while (subSz > minFontSize) {
-      const subH = estimateTextboxHeight(subText, subSz, 400, width, 1.2);
-      if (subH <= maxHeightPerText) {
-        break; // Subtítulo cabe em 300px
-      }
-      subSz--;
-    }
-  }
+    let headSz = initialHeadSz;
+    let subSz = subText ? initialSubSz : 0;
 
-  // 3) Verifica se o total cabe em 600px e ajusta se necessário
-  while (headSz > minFontSize || (subText && subSz > minFontSize)) {
-    const headH = estimateTextboxHeight(headlineText, headSz, 900, width, 1.16);
-    const subH = subText ? estimateTextboxHeight(subText, subSz, 400, width, 1.2) : 0;
-    const totalHeight = headH + (subH > 0 ? gap + subH : 0);
-
-    if (totalHeight <= maxTotalHeight) {
-      break; // Total cabe em 600px
+    // 2) AJUSTE DE FONTES: Lógica original mantida
+    // Ajusta o título para caber em 300px
+    while (headSz > minFontSize) {
+        const headH = estimateTextboxHeight(headlineText, headSz, 900, width, 1.16);
+        if (headH <= maxHeightPerText) {
+            break;
+        }
+        headSz--;
     }
 
-    /// Se ainda não cabe, reduz proporcionalmente
-    // Prioriza reduzir a fonte maior primeiro
-    if (headSz >= subSz && headSz > minFontSize) {
-      headSz--;
-    } else if (subText && subSz > minFontSize) {
-      subSz--;
-    } else if (headSz > minFontSize) {
-      // Se subSz já está no mínimo
-      headSz--;
-    } else {
-      break; // Ambas as fontes estão no mínimo, não há mais o que fazer.
+    // Ajusta o subtítulo para caber em 300px (se existir)
+    if (subText) {
+        while (subSz > minFontSize) {
+            const subH = estimateTextboxHeight(subText, subSz, 400, width, 1.2);
+            if (subH <= maxHeightPerText) {
+                break;
+            }
+            subSz--;
+        }
     }
-  }
 
-  // 4) Calcula as alturas finais
-  const finalHeadH = estimateTextboxHeight(
-    headlineText,
-    headSz,
-    900,
-    width,
-    1.16
-  );
-  const finalSubH = subText
-    ? estimateTextboxHeight(subText, subSz, 400, width, 1.2)
-    : 0;
+    // 3) Verifique se o total cabe em 600px e ajuste se necessário
+    while (headSz > minFontSize || (subText && subSz > minFontSize)) {
+        const headH = estimateTextboxHeight(headlineText, headSz, 900, width, 1.16);
+        const subH = subText ? estimateTextboxHeight(subText, subSz, 400, width, 1.2) : 0;
+        const totalHeight = headH + (subH > 0 ? gap + subH : 0);
 
-  // 5) VERIFICAÇÃO FINAL: Log para debug
-  console.log(`Título: ${headSz}px, altura: ${finalHeadH}px`);
-  console.log(`Subtítulo: ${subSz}px, altura: ${finalSubH}px`);
-  console.log(`Total: ${finalHeadH + finalSubH + (finalSubH > 0 ? gap : 0)}px`);
+        if (totalHeight <= maxTotalHeight) {
+            break;
+        }
 
-  // 6) Base de propriedades JSON para os textboxes
-  const base = {
-    type: "textbox",
-    version: "5.3.0",
-    originX: "left",
-    originY: "top",
-    stroke: null,
-    strokeWidth: 1,
-    strokeDashArray: null,
-    strokeLineCap: "butt",
-    strokeDashOffset: 0,
-    strokeLineJoin: "miter",
-    strokeUniform: false,
-    strokeMiterLimit: 4,
-    scaleX: 1,
-    scaleY: 1,
-    angle: 0,
-    flipX: false,
-    flipY: false,
-    opacity: 1,
-    shadow: null,
-    visible: true,
-    backgroundColor: "",
-    fillRule: "nonzero",
-    paintFirst: "fill",
-    globalCompositeOperation: "source-over",
-    skewX: 0,
-    skewY: 0,
-    underline: false,
-    overline: false,
-    linethrough: false,
-    fontStyle: "normal",
-    textBackgroundColor: "",
-    charSpacing: 0,
-    styles: [],
-    direction: "ltr",
-    path: null,
-    pathStartOffset: 0,
-    pathSide: "left",
-    pathAlign: "baseline",
-    minWidth: 20,
-    splitByGrapheme: false,
-    selectable: true,
-    hasControls: true,
-    editable: true,
-    fontFamily: "Poppins",
-    textAlign: "justify",
-    width,
-    left,
-  };
+        if (headSz >= subSz && headSz > minFontSize) {
+            headSz--;
+        } else if (subText && subSz > minFontSize) {
+            subSz--;
+        } else if (headSz > minFontSize) {
+            headSz--;
+        } else {
+            break;
+        }
+    }
 
-  // 7) Cria o objeto JSON para o título (headline)
-  const headlineObj = {
-    ...base,
-    top: topBase,
-    height: Math.min(finalHeadH, maxHeightPerText), // Garante máximo de 300px
-    fill: "rgba(0,0,0,1)",
-    fontWeight: 900,
-    fontSize: headSz,
-    lineHeight: 1.16,
-    text: headlineText,
-  };
-  fabricTemplate.objects.push(headlineObj);
+    // 4) Calcula as alturas finais
+    const finalHeadH = estimateTextboxHeight(
+        headlineText,
+        headSz,
+        900,
+        width,
+        1.16
+    );
+    const finalSubH = subText
+        ? estimateTextboxHeight(subText, subSz, 400, width, 1.2)
+        : 0;
 
-  // 8) Cria o objeto JSON para o subtítulo (se existir)
-  if (subText && finalSubH > 0) {
-    const subObj = {
-      ...base,
-      top: topBase + Math.min(finalHeadH, maxHeightPerText) + gap,
-      height: Math.min(finalSubH, maxHeightPerText), // Garante máximo de 300px
-      fill: "rgba(0,0,0,0.8)", // Cor um pouco mais suave para o subtítulo
-      fontWeight: 400,
-      fontSize: subSz,
-      lineHeight: 1.2,
-      text: subText,
+    // 5) VERIFICAÇÃO FINAL: Log para depuração
+    console.log(`Título: ${headSz}px, altura: ${finalHeadH.toFixed(2)}px`);
+    if (subText) {
+      console.log(`Subtítulo: ${subSz}px, altura: ${finalSubH.toFixed(2)}px`);
+      console.log(`Altura Total (com gap): ${(finalHeadH + finalSubH + gap).toFixed(2)}px`);
+
+    }
+
+    // 6) Base de propriedades JSON para os textboxes
+    const base = {
+        type: "textbox",
+        version: "5.3.0",
+        originX: "left",
+        originY: "top",
+        stroke: null,
+        strokeWidth: 1,
+        strokeDashArray: null,
+        strokeLineCap: "butt",
+        strokeDashOffset: 0,
+        strokeLineJoin: "miter",
+        strokeUniform: false,
+        strokeMiterLimit: 4,
+        scaleX: 1,
+        scaleY: 1,
+        angle: 0,
+        flipX: false,
+        flipY: false,
+        opacity: 1,
+        shadow: null,
+        visible: true,
+        backgroundColor: "",
+        fillRule: "nonzero",
+        paintFirst: "fill",
+        globalCompositeOperation: "source-over",
+        skewX: 0,
+        skewY: 0,
+        underline: false,
+        overline: false,
+        linethrough: false,
+        fontStyle: "normal",
+        textBackgroundColor: "",
+        charSpacing: 0,
+        styles: [],
+        direction: "ltr",
+        path: null,
+        pathStartOffset: 0,
+        pathSide: "left",
+        pathAlign: "baseline",
+        minWidth: 20,
+        splitByGrapheme: false,
+        selectable: true,
+        hasControls: true,
+        editable: true,
+        fontFamily: "Poppins",
+        textAlign: "left",
+        width,
+        left,
     };
-    fabricTemplate.objects.push(subObj);
-  }
+
+    // 7) Cria o objeto JSON para o título (headline)
+    const headlineObj = {
+        ...base,
+        top: topBase,
+        height: Math.min(finalHeadH, maxHeightPerText),
+        fill: "rgba(0,0,0,1)",
+        fontWeight: 900,
+        fontSize: headSz,
+        lineHeight: 1.16,
+        text: headlineText,
+    };
+    fabricTemplate.objects.push(headlineObj);
+
+    // 8) Cria o objeto JSON para o subtítulo (se existir)
+    if (subText && finalSubH > 0) {
+        const subObj = {
+            ...base,
+            top: topBase + Math.min(finalHeadH, maxHeightPerText) + gap,
+            height: Math.min(finalSubH, maxHeightPerText),
+            fill: "rgba(0,0,0,0.8)",
+            fontWeight: 400,
+            fontSize: subSz,
+            lineHeight: 1.2,
+            text: subText, // O subText agora contém o "\n\n" se foi dividido
+        };
+        fabricTemplate.objects.push(subObj);
+    }
 }

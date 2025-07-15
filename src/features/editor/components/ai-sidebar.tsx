@@ -1313,6 +1313,8 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         setGeneratedContent(contentWithLinks);
         setGeneratedContentRaw(contentWithLinks)
 
+        await handleProfileSubmitAndCreatePages()
+
         // 🎯 NOVO: Avançar para seleção de template
         // setCompletedState('template', false); // Resetar se necessário
         // setCurrentFocus('template');
@@ -1441,6 +1443,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         generatedContent.links || []
 
       );
+      
 
       console.log('🎨 Páginas geradas:', fabricPages);
 
@@ -1755,6 +1758,15 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       setTimeout(() => setCopied(false), 2000);
     }
   };
+  const handleCopyLegenda = async () => {
+    if (generatedContent) {
+      await navigator.clipboard.writeText(
+        generatedContent.legenda ?? ""
+      );
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const reset = () => {
     setExpandedSections({ sources: true });
@@ -1822,6 +1834,9 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Conteúdo Gerado</CardTitle>
                     <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={handleProfileSubmitAndCreatePages}>
+                        debug
+                      </Button>
                       <Button variant="outline" size="sm" onClick={handleCopy}>
                         {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                       </Button>
@@ -1863,6 +1878,33 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
 
 
+
+
+              <Card >
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Legenda Gerada:</CardTitle>
+                  </div>
+
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={handleCopyLegenda}>
+                      {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-gray-50 rounded-lg space-y-6 max-h-64 overflow-y-auto">
+                    <div className=" pr-2">
+                      <ul className="list-disc list-inside space-y-3 text-base leading-relaxed">
+                        {generatedContent.legenda}
+                      </ul>
+                    </div>
+                  </div>
+                </CardContent>
+
+              </Card>
+
               <Card >
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -1877,28 +1919,13 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                           <li key={i}>
                             <a href={link} target
                               ="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                              {link}
+                              {link.replace(/^https?:\/\//, '').length > 20
+                                ? link.replace(/^https?:\/\//, '').slice(0, 20) + '...'
+                                : link.replace(/^https?:\/\//, '')
+                              }
                             </a>
                           </li>
                         ))}
-                      </ul>
-                    </div>
-                  </div>
-                </CardContent>
-
-              </Card>
-
-              <Card >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Legenda Gerada:</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4 bg-gray-50 rounded-lg space-y-6 max-h-64 overflow-y-auto">
-                    <div className=" pr-2">
-                      <ul className="list-disc list-inside space-y-3 text-base leading-relaxed">
-                        {generatedContent.legenda}
                       </ul>
                     </div>
                   </div>
@@ -1916,6 +1943,11 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                   <p className="font-medium">Gerando conteúdo...</p>
                   <p className="text-sm text-gray-500">Isso pode levar alguns minutos</p>
                 </div>
+
+                {generatingImages && (<div className="text-center">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+                  <p className="font-medium">Gerando carrossel...</p>
+                </div>)}
               </CardContent>
             </Card>
           ) : (
