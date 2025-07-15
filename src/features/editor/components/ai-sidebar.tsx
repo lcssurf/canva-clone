@@ -43,6 +43,7 @@ import { useCreatePage } from '@/features/pages/api/use-create-page';
 import { useRouter } from "next/router";
 import { useGetPages } from '@/features/pages/api/use-get-pages';
 import { fetchVideoData } from '@/features/video';
+import ProfileInfoCollector from './ai/ProfileInfoCollector';
 
 // --- Tipos Aprimorados ---
 
@@ -134,11 +135,13 @@ interface AiSidebarProps {
     headline: string;
     cards: string;
     links?: string[];
+    legenda?: string;
   } | null;
   setGeneratedContent: (content: {
     headline: string;
     cards: string;
     links?: string[];
+    legenda?: string;
   } | null) => void;
 }
 
@@ -207,7 +210,7 @@ type GoalValue = typeof GOALS[number]['value'];
 type ToneValue = typeof TONES[number]['value'];
 type FormatValue = typeof FORMATS[number]['value'];
 
-const STEPS = ['sources', 'posts', 'goal', 'niche', 'audience', 'subject', 'template', 'tone'] as const;
+const STEPS = ['sources', 'posts', 'goal', 'niche', 'audience', 'subject', 'tone', 'template', 'profile'] as const;
 type SectionName = typeof STEPS[number];
 // Adicionar tipo para template
 type TemplateId = typeof CAROUSEL_TEMPLATES[number]['id'];
@@ -675,219 +678,6 @@ const ExpandableSection: React.FC<{
   );
 };
 
-// Profile Info Collector Component com Upload
-interface ProfileInfoCollectorProps {
-  username: string;
-  profileImage: string;
-  onUsernameChange: (username: string) => void;
-  onProfileImageChange: (image: string) => void;
-  onContinue: () => void;
-  loading?: boolean;
-}
-const ProfileInfoCollector = ({
-  username,
-  profileImage,
-  onUsernameChange,
-  onProfileImageChange,
-  onContinue,
-  loading = false
-}: ProfileInfoCollectorProps) => {
-  const [imagePreview, setImagePreview] = useState(profileImage);
-  const [imageError, setImageError] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-
-
-
-  const handleImageUrlChange = (url: string) => {
-    onProfileImageChange(url);
-    setImagePreview(url);
-    setImageError(false);
-  };
-
-  const handleImageError = () => {
-    setImageError(true);
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = (e.target as FileReader)?.result;
-        if (typeof result === 'string') {
-          handleImageUrlChange(result);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files[0] && files[0].type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = (e.target as FileReader)?.result;
-        if (typeof result === 'string') {
-          handleImageUrlChange(result);
-        }
-      };
-      reader.readAsDataURL(files[0]);
-    }
-  };
-
-  const isValid = username.trim() && profileImage.trim() && !imageError;
-
-  return (
-    <div className="space-y-6 w-full">
-      <div className="text-center space-y-2">
-        <h3 className="font-semibold text-lg">👤 Informações do Perfil</h3>
-        <p className="text-sm text-gray-600">
-          Adicione seu @ e foto para personalizar os cards
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        {/* Preview da foto */}
-        <div className="flex justify-center">
-          <div className="relative">
-            {imagePreview && !imageError ? (
-              <div className="relative w-20 h-20 rounded-full overflow-hidden border-4 border-blue-500 bg-gray-100">
-                <img
-                  src={imagePreview}
-                  alt="Preview do perfil"
-                  className="w-full h-full object-cover"
-                  onError={handleImageError}
-                />
-              </div>
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-gray-200 border-4 border-gray-300 flex items-center justify-center">
-                <Upload className="w-8 h-8 text-gray-400" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Campo do username */}
-        <div className="space-y-2">
-          <label htmlFor="username" className="text-sm font-medium text-gray-700">
-            Seu @ no Instagram
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-500 text-sm">@</span>
-            </div>
-            <Input
-              id="username"
-              type="text"
-              placeholder="seu_usuario"
-              value={username.replace('@', '')}
-              onChange={(e) => onUsernameChange(e.target.value.replace('@', ''))}
-              className="pl-8"
-              disabled={loading}
-            />
-          </div>
-        </div>
-
-        {/* Upload de imagem */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Foto de perfil
-          </label>
-
-          {/* Área de upload */}
-          <div
-            className={cn(
-              "relative border-2 border-dashed rounded-lg p-4 transition-colors",
-              dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300",
-              "hover:border-blue-400 hover:bg-gray-50"
-            )}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              disabled={loading}
-            />
-            <div className="text-center">
-              <Upload className="mx-auto h-8 w-8 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">
-                <span className="font-medium text-blue-600">Clique para fazer upload</span> ou arraste uma imagem
-              </p>
-              <p className="text-xs text-gray-500">PNG, JPG até 10MB</p>
-            </div>
-          </div>
-
-          {/* Campo de URL alternativo */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-2 text-gray-500">ou cole uma URL</span>
-            </div>
-          </div>
-
-          <Input
-            type="url"
-            placeholder="https://exemplo.com/sua-foto.jpg"
-            value={profileImage}
-            onChange={(e) => handleImageUrlChange(e.target.value)}
-            disabled={loading}
-          />
-
-          {imageError && (
-            <p className="text-xs text-red-600">
-              ❌ Não foi possível carregar a imagem. Tente outra.
-            </p>
-          )}
-        </div>
-
-        {/* Botão de continuar */}
-        <Button
-          className="w-full"
-          onClick={onContinue}
-          disabled={!isValid || loading}
-          size="lg"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              Processando...
-            </>
-          ) : (
-            "✨ Finalizar Template"
-          )}
-        </Button>
-
-        {!isValid && (
-          <p className="text-xs text-gray-500 text-center">
-            Preencha todos os campos para continuar
-          </p>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // Template Selector Component
 interface TemplateSelectorProps {
@@ -904,7 +694,6 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 }) => {
   return (
     <div className="space-y-4 w-full">
-
       <div className="text-center space-y-3">
         <div className="space-y-1">
           <h3 className="font-bold text-xl text-gray-900">Escolha seu Template</h3>
@@ -919,13 +708,15 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 w-full p-1">
+      {/* ✅ CORREÇÃO 1: Remover padding interno que pode causar overflow */}
+      <div className="grid grid-cols-2 gap-3 w-full">
         {CAROUSEL_TEMPLATES.map((template) => (
           <div
             key={template.id}
             className={cn(
               "relative cursor-pointer transition-all duration-300 group",
-              selectedTemplate === template.id && "ring-2 ring-blue-500 ring-offset-2"
+              // ✅ CORREÇÃO 2: Simplificar o ring para evitar problemas de offset
+              selectedTemplate === template.id && "ring-2 ring-blue-500"
             )}
             onClick={() => onTemplateSelect(template.id)}
           >
@@ -938,82 +729,25 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   : "group-hover:scale-102"
               )}>
 
-                {/* Modern Minimal */}
-                {/* {template.id === 'modern-minimal' && (
-                  <div className="h-full bg-gradient-to-br from-gray- to-gray-700 flex items-center justify-center">
-                    <div className="text-white text-center space-y-2 p-4">
-                      <div className="w-12 h-12 bg-white rounded-full mx-auto"></div>
-                      <div className="space-y-1">
-                        <div className="h-2 bg-white/80 rounded w-16 mx-auto"></div>
-                        <div className="h-1 bg-white/60 rounded w-12 mx-auto"></div>
-                      </div>
-                    </div>
-                  </div>
-                )} */}
-
-                {/* Vibrant Creative */}
-                {/* {template.id === 'vibrant-creative' && (
-                  <div className="h-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
-                    <div className="text-white text-center space-y-2 p-4">
-                      <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-full mx-auto"></div>
-                      <div className="space-y-1">
-                        <div className="h-2 bg-white/90 rounded w-16 mx-auto"></div>
-                        <div className="h-1 bg-white/70 rounded w-12 mx-auto"></div>
-                      </div>
-                    </div>
-                  </div>
-                )} */}
-
-                {/* Professional Corporate */}
-                {/* {template.id === 'professional-corporate' && (
-                  <div className="h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-                    <div className="text-white text-center space-y-2 p-4">
-                      <div className="w-12 h-12 bg-white rounded-full mx-auto"></div>
-                      <div className="space-y-1">
-                        <div className="h-2 bg-white rounded w-16 mx-auto"></div>
-                        <div className="h-1 bg-white/80 rounded w-12 mx-auto"></div>
-                      </div>
-                    </div>
-                  </div>
-                )} */}
-
-                {/* Warm Personal */}
-                {/* {template.id === 'warm-personal' && (
-                  <div className="h-full bg-gradient-to-br from-orange-400 via-pink-400 to-red-400 flex items-center justify-center">
-                    <div className="text-white text-center space-y-2 p-4">
-                      <div className="w-12 h-12 bg-white/30 backdrop-blur rounded-full mx-auto"></div>
-                      <div className="space-y-1">
-                        <div className="h-2 bg-white/90 rounded w-16 mx-auto"></div>
-                        <div className="h-1 bg-white/70 rounded w-12 mx-auto"></div>
-                      </div>
-                    </div>
-                  </div>
-                )} */}
-                {/* Twitter Template - Baseado no estilo Editorial laranja */}
+                {/* Twitter Template */}
                 {template.id === 'twitter' && (
                   <div className="h-full bg-white relative overflow-hidden">
                     {/* Header com perfil */}
-                    <div className="absolute top-6 left-2 right-2 flex items-center space-x-1.5">
-                      {/* Profile Picture */}
-                      <div className="w-4 h-4 bg-blue-400 rounded-full opacity-90"></div>
-
+                    <div className="absolute top-4 left-2 right-2 flex items-center space-x-1.5">
+                      <div className="w-3 h-3 bg-blue-400 rounded-full opacity-90"></div>
                       <div className='flex flex-col gap-0.5'>
-                        {/* Username line */}
-                        <div className="h-0.5 bg-black rounded w-10 opacity-90"></div>
-                        <div className="h-0.5 bg-slate-400 rounded w-10 opacity-90"></div>
+                        <div className="h-0.5 bg-black rounded w-8 opacity-90"></div>
+                        <div className="h-0.5 bg-slate-400 rounded w-8 opacity-90"></div>
                       </div>
                     </div>
 
                     {/* Main Content Area */}
                     <div className="absolute inset-0 flex flex-col justify-center p-2">
-                      {/* Tweet Text Lines - Preto como no editorial */}
                       <div className="space-y-1 mb-2">
                         <div className="h-1.5 bg-black rounded w-full"></div>
                         <div className="h-1.5 bg-black rounded w-4/5"></div>
                         <div className="h-1.5 bg-black rounded w-3/4"></div>
                       </div>
-
-                      {/* Subtitle/Second paragraph - Branco como no editorial */}
                       <div className="space-y-0.5">
                         <div className="h-0.5 bg-slate-400 rounded w-3/4 opacity-90"></div>
                         <div className="h-0.5 bg-slate-400 rounded w-3/4 opacity-90"></div>
@@ -1022,62 +756,21 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     </div>
 
                     {/* Media/Image Placeholder */}
-                    <div className="absolute bottom-8 left-2 right-2 h-6 bg-gradient-to-br from-blue-100 to-blue-200 rounded border border-gray-200">
-                      <div className="w-full h-full bg-gradient-to-t from-blue-500/20 to-transparent rounded flex items-center justify-center">
-                        {/* <div className="w-3 h-2 bg-blue-500/40 rounded"></div> */}
-                      </div>
+                    <div className="absolute bottom-6 left-2 right-2 h-5 bg-gradient-to-br from-blue-100 to-blue-200 rounded border border-gray-200">
+                      <div className="w-full h-full bg-gradient-to-t from-blue-500/20 to-transparent rounded"></div>
                     </div>
-                    {/* Media placeholder - Similar ao editorial
-                    <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-black/20 backdrop-blur-sm">
-                      <div className="w-full h-full bg-gradient-to-t from-black/40 to-transparent flex items-center justify-center">
-                        <div className="w-3 h-2 bg-white/60 rounded"></div>
-                      </div>
-                    </div> */}
 
-                    {/* Navigation dots - Igual ao editorial */}
+                    {/* ✅ CORREÇÃO 3: Ajustar posição dos dots para não ficarem cortados */}
                     <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex space-x-0.5">
                       {[...Array(5)].map((_, i) => (
-                        <div key={i} className={`w-0.5 h-0.5 rounded-full ${i === 0 ? 'bg-white' : 'bg-white/50'}`}></div>
+                        <div
+                          key={i}
+                          className={`w-0.5 h-0.5 rounded-full ${i === 0 ? 'bg-gray-600' : 'bg-gray-400'}`}
+                        ></div>
                       ))}
                     </div>
                   </div>
                 )}
-
-                {/* Editorial Bold - Novo template baseado nas imagens */}
-                {/* {template.id === 'editorial-bold' && (
-                  <div className="h-full bg-gradient-to-br from-red-500 to-orange-500 relative overflow-hidden"> */}
-                {/* Header */}
-                {/* <div className="absolute top-2 left-2 right-2 flex justify-between">
-                      <div className="text-white text-[6px] font-medium opacity-80">ESTUDO DE CASO</div>
-                      <div className="text-white text-[6px] font-medium opacity-80">BRANDS DECODED</div>
-                    </div> */}
-
-                {/* Main Content */}
-                {/* <div className="absolute inset-0 flex flex-col justify-center p-3"> */}
-                {/* Bold Title */}
-                {/* <div className="space-y-1 mb-2">
-                        <div className="h-2 bg-black rounded w-full"></div>
-                        <div className="h-2 bg-black rounded w-4/5"></div>
-                        <div className="h-2 bg-black rounded w-3/4"></div>
-                      </div> */}
-
-                {/* Subtitle */}
-                {/* <div className="space-y-1">
-                        <div className="h-1 bg-white rounded w-3/4"></div>
-                        <div className="h-1 bg-white rounded w-2/3"></div>
-                        <div className="h-1 bg-white rounded w-1/2"></div>
-                      </div>
-                    </div> */}
-
-
-                {/* Navigation dots */}
-                {/* <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className={`w-1 h-1 rounded-full ${i === 0 ? 'bg-white' : 'bg-white/50'}`}></div>
-                      ))}
-                    </div>
-                  </div>
-                )} */}
               </div>
 
               {/* Selection Overlay */}
@@ -1099,31 +792,35 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               )}
             </div>
 
-            {/* Template Name */}
-            <p className="text-xs text-center mt-2 text-gray-600 font-medium">
+            {/* ✅ CORREÇÃO 4: Adicionar margin-top consistente */}
+            <p className="text-xs text-center mt-2 text-gray-600 font-medium leading-tight">
               {template.name}
             </p>
           </div>
         ))}
       </div>
 
-      <Button
-        className="w-full"
-        onClick={onContinue}
-        disabled={!selectedTemplate || generating}
-        size="lg"
-      >
-        {generating ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            Criando páginas...
-          </>
-        ) : selectedTemplate ? (
-          "🎨 Criar Páginas"
-        ) : (
-          "Selecione um template para continuar"
-        )}
-      </Button>
+      {/* ✅ CORREÇÃO 5: Adicionar margin-top maior para separar melhor do grid */}
+      <div className="mt-6">
+        <Button
+          className="w-full"
+          onClick={onContinue}
+          disabled={!selectedTemplate || generating}
+          size="lg"
+        >
+          {generating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              {/* ✅ CORREÇÃO 6: Texto mais específico baseado no contexto */}
+              Gerando conteúdo...
+            </>
+          ) : selectedTemplate ? (
+            "🎨 Escolher modelo"
+          ) : (
+            "Selecione um modelo para continuar"
+          )}
+        </Button>
+      </div>
     </div>
   );
 };
@@ -1472,65 +1169,6 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
       setLoadingState('sources', false);
     }
   }
-  //   const handleAddYouTubeSource = async (url: string) => {
-  //   if (!url.trim() || sources.length >= 3) {
-  //     toast.error('URL inválida ou limite de fontes atingido.');
-  //     return;
-  //   }
-
-  //   // ADICIONAR: Importar e usar a função de limpeza
-  //   // const { cleanYouTubeUrl } = require('@/features/youtube/use-youtube-transcript'); // ou o caminho correto
-  //   // const cleanUrl = cleanYouTubeUrl(url.trim());
-  //   // console.log('🔗 URL original:', url);
-  //   // console.log('🔗 URL limpa:', cleanUrl);
-
-  //   setLoadingState('sources', true);
-
-  //   try {
-  //     const response = await client.api.youtube.transcript.$post({
-  //       json: {
-  //         videoUrl: cleanUrl, // USAR URL LIMPA
-  //         lang: 'pt',
-  //         country: 'BR'
-  //       }
-  //     });
-
-  //     if (!response.ok) {
-  //       const errorData = await response.json();
-  //       throw new Error(errorData.error || 'Erro ao obter transcrição');
-  //     }
-
-  //     const { data } = await response.json();
-
-  //     const youtubeVideo: YouTubeVideo = {
-  //       url: data.videoUrl,
-  //       title: `Vídeo YouTube ${data.videoId}`,
-  //       transcript: data.fullText,
-  //       duration: data.totalDuration
-  //     };
-
-  //     const newSource: SourceData = {
-  //       id: `youtube-${Date.now()}`,
-  //       type: 'youtube',
-  //       data: { url: cleanUrl, domain: 'youtube.com' }, // USAR URL LIMPA
-  //       videos: [youtubeVideo]
-  //     };
-
-  //     setSources(prev => [...prev, newSource]);
-
-  //     if (sources.length === 0) {
-  //       setCompletedState('sources', true);
-  //     }
-
-  //     toast.success('Transcrição do YouTube obtida com sucesso!');
-
-  //   } catch (error) {
-  //     setErrorText('Erro ao obter transcrição do YouTube. Verifique a URL e tente novamente.');
-  //     console.error('Error fetching YouTube transcript:', error);
-  //   } finally {
-  //     setLoadingState('sources', false);
-  //   }
-  // };
 
   const removeSource = (sourceId: string) => {
     setSources(prev => prev.filter(s => s.id !== sourceId));
@@ -1607,7 +1245,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
     setExpandedSections(prev => ({ ...prev, tone: false }));
 
     // 🚀 Gerar conteúdo primeiro
-    await handleFormatAndGenerate(defaultFormat);
+    // await handleFormatAndGenerate(defaultFormat);
   };
 
   const handleFormatAndGenerate = async (selectedFormat: FormatValue) => {
@@ -1646,7 +1284,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
           })),
       };
 
-      console.log('🚀 Payload para API:', payload);
+      // console.log('🚀 Payload para API:', payload);
 
       // Chamar a nova rota de geração de conteúdo
       const response = await client.api.ai["generate-content"].$post({
@@ -1676,12 +1314,12 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
         setGeneratedContentRaw(contentWithLinks)
 
         // 🎯 NOVO: Avançar para seleção de template
-        setCompletedState('template', false); // Resetar se necessário
-        setCurrentFocus('template');
-        setExpandedSections(prev => ({
-          ...prev,
-          template: true
-        }));
+        // setCompletedState('template', false); // Resetar se necessário
+        // setCurrentFocus('template');
+        // setExpandedSections(prev => ({
+        //   ...prev,
+        //   template: true
+        // }));
 
         // Toast de sucesso (opcional)
         toast.success('🎯 Conteúdo gerado com sucesso!', {
@@ -1756,10 +1394,23 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
 
   // Nova função para lidar com a seleção de template
   const handleTemplateSelectionAndCreatePages = async () => {
-    if (!selectedTemplate || !generatedContent) return;
+    if (!selectedTemplate) return;
 
+    setCompletedState('template', true);
     // Mostrar formulário de perfil
-    setShowProfileForm(true);
+    // setShowProfileForm(true);
+  };
+
+  // 2. NOVA FUNÇÃO handleTemplateSelectionAndGenerate (substituir a existente)
+  const handleTemplateSelectionAndGenerate = async () => {
+    if (!selectedTemplate) return;
+
+    // ✅ PRIMEIRO: Gerar o conteúdo
+    const defaultFormat = 'carrossel';
+    await handleFormatAndGenerate(defaultFormat);
+
+    // ✅ DEPOIS: Avançar para seção de perfil (sem mostrar formulário ainda)
+    setCompletedState('template', true);
   };
 
   const handleTemplateSelect = (templateId: TemplateId) => {
@@ -1788,7 +1439,7 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
           image: profileImage
         },
         generatedContent.links || []
-        
+
       );
 
       console.log('🎨 Páginas geradas:', fabricPages);
@@ -2209,36 +1860,51 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                 </CardContent>
 
               </Card>
-              <div className='mt-4 space-y-2'>
-                {/* // 6. COMPONENTE ATUALIZADO DA SEÇÃO DE TEMPLATE (substitua o ExpandableSection existente) */}
-                <ExpandableSection
-                  title="6. Template do Carrossel"
-                  icon={FileText}
-                  expanded={!!expandedSections.template}
-                  onToggle={() => toggleSection('template')}
-                  completed={!!completed.template}
-                  required
-                  autoFocus={currentFocus === 'template'}
-                >
-                  {!showProfileForm ? (
-                    <TemplateSelector
-                      selectedTemplate={selectedTemplate}
-                      onTemplateSelect={handleTemplateSelect}
-                      onContinue={handleTemplateSelectionAndCreatePages}
-                      generating={generatingImages}
-                    />
-                  ) : (
-                    <ProfileInfoCollector
-                      username={profileUsername}
-                      profileImage={profileImage}
-                      onUsernameChange={setProfileUsername}
-                      onProfileImageChange={setProfileImage}
-                      onContinue={handleProfileSubmitAndCreatePages}
-                      loading={generatingImages}
-                    />
-                  )}
-                </ExpandableSection>
-              </div>
+
+
+
+              <Card >
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Fonte das Imagens:</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-gray-50 rounded-lg space-y-6 max-h-64 overflow-y-auto">
+                    <div className=" pr-2">
+                      <ul className="list-disc list-inside space-y-3 text-base leading-relaxed">
+                        {generatedContent?.links?.map((link, i) => (
+                          <li key={i}>
+                            <a href={link} target
+                              ="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                              {link}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </CardContent>
+
+              </Card>
+
+              <Card >
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Legenda Gerada:</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-gray-50 rounded-lg space-y-6 max-h-64 overflow-y-auto">
+                    <div className=" pr-2">
+                      <ul className="list-disc list-inside space-y-3 text-base leading-relaxed">
+                        {generatedContent.legenda}
+                      </ul>
+                    </div>
+                  </div>
+                </CardContent>
+
+              </Card>
 
 
             </div>
@@ -2389,45 +2055,9 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                     </div>
                   </ExpandableSection>
 
-                  <ExpandableSection
-                    title="6. Template do Carrossel"
-                    icon={FileText}
-                    expanded={!!expandedSections.template}
-                    onToggle={() => toggleSection('template')}
-                    completed={!!completed.template}
-                    required
-                    autoFocus={currentFocus === 'template'}
-                  >
-                    {!showProfileForm ? (
-                      <TemplateSelector
-                        selectedTemplate={selectedTemplate}
-                        onTemplateSelect={handleTemplateSelect}
-                        onContinue={() => {
-                          if (selectedTemplate) {
-                            setShowProfileForm(true);
-                          }
-                        }}
-                        generating={false}
-                      />
-                    ) : (
-                      <ProfileInfoCollector
-                        username={profileUsername}
-                        profileImage={profileImage}
-                        onUsernameChange={setProfileUsername}
-                        onProfileImageChange={setProfileImage}
-                        onContinue={() => {
-                          if (profileUsername && profileImage) {
-                            setCompletedState('template', true);
-                          }
-                        }}
-                        loading={false}
-                      />
-                    )}
-                  </ExpandableSection>
-
                   {/* Seção 7: Tom de Voz (NOVA) */}
                   <ExpandableSection
-                    title="7. Tom de Voz"
+                    title="6. Tom de Voz"
                     icon={MessageSquare}
                     expanded={!!expandedSections.tone}
                     onToggle={() => toggleSection('tone')}
@@ -2458,12 +2088,61 @@ export const AiSidebar: React.FC<AiSidebarProps> = ({
                               Gerando conteúdo...
                             </>
                           ) : (
-                            "🚀 Gerar Conteúdo"
+                            "Escolher Tom de Voz"
                           )}
                         </Button>
                       )}
                     </div>
                   </ExpandableSection>
+
+                  <ExpandableSection
+                    title="7. Modelo do Carrossel"
+                    icon={FileText}
+                    expanded={!!expandedSections.template}
+                    onToggle={() => toggleSection('template')}
+                    completed={!!completed.template}
+                    required
+                    autoFocus={currentFocus === 'template'}
+                  >
+                    <TemplateSelector
+                      selectedTemplate={selectedTemplate}
+                      onTemplateSelect={handleTemplateSelect}
+                      onContinue={() => {
+                        if (selectedTemplate) {
+                          setCompletedState('template', true);
+                          setExpandedSections(prev => ({ ...prev, template: false }));
+                        }
+                      }}
+                      generating={false}
+                    />
+                  </ExpandableSection>
+
+                  <ExpandableSection
+                    title="8. Informações do Perfil"
+                    icon={FileText}
+                    expanded={!!expandedSections.profile}
+                    onToggle={() => toggleSection('profile')}
+                    completed={!!completed.profile}
+                    required
+                    autoFocus={currentFocus === 'profile'}
+                  >
+                    <ProfileInfoCollector
+                      username={profileUsername}
+                      profileImage={profileImage}
+                      onUsernameChange={setProfileUsername}
+                      onProfileImageChange={setProfileImage}
+                      onContinue={async () => {
+                        if (profileUsername && profileImage) {
+                          setCompletedState('profile', true);
+                          setGenerating(true);
+                          await handleFormatAndGenerate('carrossel');
+                        }
+                      }}
+                      loading={false}
+                    />
+                  </ExpandableSection>
+
+
 
                 </>
               )}

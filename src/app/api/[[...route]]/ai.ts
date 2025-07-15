@@ -173,6 +173,7 @@ const app = new Hono()
               headline: firstContent.headline || "Título gerado",
               cards: firstContent.cards || "Cartões gerados",
               links: firstContent.links || [],
+              legenda: firstContent.legenda || "Legenda gerada",
             },
             metadata: {
               goal: validatedData.goal,
