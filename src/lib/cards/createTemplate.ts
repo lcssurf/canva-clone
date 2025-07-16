@@ -204,7 +204,7 @@ export async function generateEditorialBoldTemplate(
     profile.image.startsWith("data:image/")
   ) {
     // Foto de perfil, preenchendo todo o círculo
-    const processedBase64 = await processImageSmart(profile.image, 150);
+    const processedBase64 = await preprocessWithPica(profile.image, 150);
     // console.log("Processed Base64:", processedBase64);
 
     const img = new Image();
@@ -520,7 +520,7 @@ export async function generateTwitterTemplate(
   console.log("Fabric Template with white background:", fabricTemplate);
 
   // Foto de perfil, preenchendo todo o círculo
-  const processedBase64 = await processImageSmart(profile.image, 200);
+  const processedBase64 = await preprocessWithPica(profile.image, 200);
   const img = new Image();
   img.src = processedBase64;
   await img.decode();
@@ -581,7 +581,7 @@ export async function generateTwitterTemplate(
 
   const verifiedIconUrl =
     "https://miro.medium.com/v2/resize:fit:1400/1*FB9KwfU1r-fhk45LxHbx1w.png";
-  const processedVerifiedBase64 = await processImageSmart(verifiedIconUrl, 50);
+  const processedVerifiedBase64 = await preprocessWithPica(verifiedIconUrl, 50);
 
   const verifiedIcon = new Image();
   verifiedIcon.src = processedVerifiedBase64;
@@ -815,8 +815,8 @@ export async function generateTwitterTemplate(
   const processedImageBase64 = await processImageSmart(image, 880, 495, true);
   console.log("Processed Image Base64:", processedImageBase64);
   
-  // console.log("Original 'link' passed to processImageSmart:", image.substring(0, 100) + "...", "Length:", image.length);
-  // const processedImageBase64 = await processImageSmart(
+  // console.log("Original 'link' passed to preprocessWithPica:", image.substring(0, 100) + "...", "Length:", image.length);
+  // const processedImageBase64 = await preprocessWithPica(
   //   image,
   //   objectWidth - padding * 2,
   //   435
@@ -928,6 +928,85 @@ export async function generateTwitterTemplate(
  * @param {number} [h] - A altura final. Se fornecida, a imagem será retangular.
  * @returns {Promise<string>} - A nova imagem como uma Data URL completa (ex: "data:image/png;base64,...").
  */
+async function preprocessWithPica(
+  imageSource: string,
+  sizeOrW: number = 120,
+  h?: number
+): Promise<string> {
+  let sourceForImageElement: string;
+
+  // ✅ CORREÇÃO: Lida com os 3 tipos de entrada: Data URL, URL externa e Base64 puro.
+  if (imageSource.startsWith('data:')) {
+    // Caso 1: Já é uma Data URL completa.
+    sourceForImageElement = imageSource;
+  } else if (imageSource.startsWith('http')) {
+    // Caso 2: É uma URL externa (http ou https).
+    sourceForImageElement = imageSource;
+  } else {
+    // Caso 3: Assume que é uma string Base64 pura e adiciona o cabeçalho.
+    const mimeType = imageSource.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+    console.log("Assuming MIME type for large Base64:", mimeType); 
+    sourceForImageElement = `data:${mimeType};base64,${imageSource}`;
+  }
+
+  console.log("Source for Image Element (inside preprocessWithPica):", sourceForImageElement); // Adicione esta linha
+  // 1) Carrega a imagem usando a fonte correta
+  const img = new Image();
+  // 'crossOrigin' é essencial para carregar imagens de outras origens em um canvas.
+  img.crossOrigin = "anonymous";
+  img.src = sourceForImageElement;
+  await img.decode();
+
+  // 2) Crop central em um canvas fora da tela (OffscreenCanvas)
+  const isSquare = typeof h !== "number";
+  const cropWidth = isSquare ? Math.min(img.naturalWidth, img.naturalHeight) : sizeOrW;
+  const cropHeight = isSquare ? cropWidth : h;
+
+  const sx = (img.naturalWidth - cropWidth) / 2;
+  const sy = (img.naturalHeight - cropHeight) / 2;
+
+  const cropCanvas = new OffscreenCanvas(cropWidth, cropHeight);
+  const cropCtx = cropCanvas.getContext("2d");
+  if (!cropCtx) {
+    throw new Error("Falha ao obter o contexto 2D para o canvas de crop.");
+  }
+  cropCtx.drawImage(img, sx, sy, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+  // 3) Redimensiona a imagem recortada usando Pica para alta qualidade
+  const targetW = sizeOrW;
+  const targetH = isSquare ? sizeOrW : h;
+  const resizedCanvas = new OffscreenCanvas(targetW, targetH);
+  await Pica().resize(cropCanvas, resizedCanvas);
+
+  // 4) Cria o canvas final, aplicando máscara circular se for um quadrado
+  const finalCanvas = new OffscreenCanvas(targetW, targetH);
+  const finalCtx = finalCanvas.getContext("2d");
+  if (!finalCtx) {
+    throw new Error("Falha ao obter o contexto 2D para o canvas final.");
+  }
+
+  if (isSquare) {
+    // Aplica a máscara circular
+    finalCtx.save();
+    finalCtx.beginPath();
+    finalCtx.arc(targetW / 2, targetH / 2, targetW / 2, 0, Math.PI * 2);
+    finalCtx.clip();
+    finalCtx.drawImage(resizedCanvas, 0, 0);
+    finalCtx.restore();
+  } else {
+    // Desenha a imagem retangular sem máscara
+    finalCtx.drawImage(resizedCanvas, 0, 0);
+  }
+
+  // 5) Converte o canvas final para uma Data URL completa e a retorna
+  const blob = await finalCanvas.convertToBlob({ type: "image/png" });
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(blob);
+  });
+}
 
 // =======================================================================
 // NOVA FUNÇÃO AUXILIAR - SEM DEPENDÊNCIA DE CANVAS
