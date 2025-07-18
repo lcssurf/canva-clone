@@ -1,3 +1,21 @@
+// ✅ CONFIGURAÇÃO: URL do seu image-proxy
+const IMAGE_PROXY_URL = "/api/image-proxy"; // ou sua URL completa
+
+// ✅ FUNÇÃO: Converter URL externa para proxy
+function getProxiedImageUrl(originalUrl: string): string {
+  if (!originalUrl || originalUrl.startsWith('data:')) {
+    return originalUrl; // Base64 ou vazio, não precisa de proxy
+  }
+  
+  if (!originalUrl.startsWith('http')) {
+    return originalUrl; // URL relativa, não precisa de proxy
+  }
+  
+  // Usar o proxy para URLs externas
+  const encodedUrl = encodeURIComponent(originalUrl);
+  return `${IMAGE_PROXY_URL}?url=${encodedUrl}`;
+}
+
 /**
  * Sistema otimizado de processamento de imagens
  * - Validação rápida de URLs
@@ -14,22 +32,22 @@ export async function processImageSmart(
 ): Promise<string> {
   console.log(`🚀 Processamento inteligente: ${imageSource.substring(0, 50)}...`);
   
-  try {
+    try {
     const shouldProcess = forceProcess || !!h;
 
-    // 1️⃣ VERIFICAÇÃO RÁPIDA: Se é uma URL válida e não precisa de processamento
-    if (!shouldProcess && await isValidImageUrl(imageSource)) {
-      console.log('✅ URL válida detectada, retornando diretamente');
-      return imageSource;
-    }
-    
-    // 2️⃣ VERIFICAÇÃO: Se já é base64 válido
+    // 1️⃣ Se já é base64, retorna direto
     if (imageSource.startsWith('data:image/')) {
       console.log('✅ Base64 válido detectado, retornando diretamente');
       return imageSource;
     }
     
-    // 3️⃣ SÓ PROCESSA SE NECESSÁRIO
+    // 2️⃣ Se é URL externa e não precisa processamento, usar proxy
+    if (!shouldProcess && imageSource.startsWith('http')) {
+      console.log('✅ URL externa detectada, usando proxy');
+      return getProxiedImageUrl(imageSource);
+    }
+    
+    // 3️⃣ SÓ PROCESSA SE NECESSÁRIO (com proxy)
     console.log('🔄 Processamento necessário, iniciando...');
     return await fastImageProcess(imageSource, sizeOrW, h);
     
@@ -140,66 +158,61 @@ async function deepUrlCheckAndConvertToBase64(url: string): Promise<string> {
 //   }
 // }
 
-// ✅ FUNÇÃO: Processamento rápido (sem retry desnecessário)
+// ✅ FUNÇÃO ATUALIZADA: fastImageProcess com proxy
 async function fastImageProcess(
   imageSource: string,
   sizeOrW: number,
   h?: number
 ): Promise<string> {
   let sourceForImageElement: string;
-  let objectUrl: string | null = null; // Para limpeza posterior
+  let objectUrl: string | null = null;
 
   try {
     // 1. Normalizar a fonte da imagem
     if (imageSource.startsWith('data:')) {
       sourceForImageElement = imageSource;
     } else if (imageSource.startsWith('http')) {
-      // ✅ CORREÇÃO PRINCIPAL: Usar fetch para contornar problemas de CORS.
-      // Primeiro, buscamos a imagem como um "blob" (dados binários).
-      console.log('🔄 Buscando imagem via fetch para evitar CORS...');
-      const response = await fetch(imageSource);
+      // ✅ USAR PROXY EM VEZ DE FETCH DIRETO
+      console.log('🔄 Usando proxy para evitar CORS...');
+      const proxiedUrl = getProxiedImageUrl(imageSource);
+      
+      // Agora fazer fetch no proxy (sem CORS)
+      const response = await fetch(proxiedUrl);
       if (!response.ok) {
-        throw new Error(`Falha ao buscar imagem, status: ${response.status}`);
+        throw new Error(`Falha ao buscar imagem via proxy, status: ${response.status}`);
       }
       const imageBlob = await response.blob();
-     
-      // Em seguida, criamos uma URL temporária local para este blob.
-      // Esta URL não é "cross-origin", então podemos usá-la no canvas.
+      
       objectUrl = URL.createObjectURL(imageBlob);
       sourceForImageElement = objectUrl;
-      console.log('✅ Imagem carregada em uma URL de objeto local.');
-     
+      console.log('✅ Imagem carregada via proxy em URL local.');
+      
     } else {
       // Base64 puro
       const mimeType = detectMimeTypeFast(imageSource);
       sourceForImageElement = `data:${mimeType};base64,${imageSource}`;
     }
 
-    // 2. Carregar a imagem (agora de uma fonte segura) com timeout
+    // 2. Carregar a imagem com timeout
     const img = await loadImageFast(sourceForImageElement, 5000);
    
-    // 3. Verificar se as dimensões estão OK
+    // 3. Verificar se precisa redimensionar
     const needsResize = needsResizing(img, sizeOrW, h);
    
     if (!needsResize) {
-      console.log('✅ Imagem já tem bom tamanho, retornando original');
-      // Se a imagem original já serve, podemos tentar retornar a URL original se possível,
-      // ou converter o blob para base64 se for a única opção.
+      console.log('✅ Imagem já tem bom tamanho');
+      // Para URLs externas, sempre retornar o proxy
       if (imageSource.startsWith('http')) {
-         // Para evitar conversões desnecessárias, podemos retornar a URL original se ela for acessível
-         // ou converter o blob que já temos para base64. Vamos converter por segurança.
-         return await blobToBase64(await (await fetch(imageSource)).blob());
+        return getProxiedImageUrl(imageSource);
       }
       return sourceForImageElement;
     }
    
-    // 4. Processar (redimensionar/cortar) apenas se necessário
+    // 4. Processar se necessário
     console.log('🔄 Redimensionando a imagem...');
     return await quickResize(img, sizeOrW, h);
 
   } finally {
-    // 5. Limpeza importante!
-    // Revoga a URL do objeto para liberar memória do navegador.
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl);
       console.log('🗑️ URL de objeto local liberada.');

@@ -11,7 +11,7 @@ type ResponseType = InferResponseType<typeof client.api.projects[":projectId"]["
 export const useDeletePage = (projectId: string) => {
   const queryClient = useQueryClient();
 
-  const mutation = useMutation<ResponseType, Error, { pageId: string }>({
+  const mutation = useMutation<ResponseType, Error, { pageId: string }, { previousPages: unknown }>({
     mutationFn: async ({ pageId }) => {
       const response = await client.api.projects[":projectId"]["pages"][":pageId"].$delete({
         param: { projectId, pageId },
@@ -23,12 +23,33 @@ export const useDeletePage = (projectId: string) => {
 
       return response.json();
     },
+    onError: (err, variables, context) => {
+      if (context?.previousPages) {
+        queryClient.setQueryData(["pages", projectId], context.previousPages);
+      }
+      toast.error("Failed to delete page");
+    },
+    
     onSuccess: () => {
       toast.success("Page deleted");
+    },
+    
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["pages", projectId] });
     },
-    onError: () => {
-      toast.error("Failed to delete page");
+    // ✅ OPTIMISTIC DELETE
+    onMutate: async ({ pageId }) => {
+      await queryClient.cancelQueries({ queryKey: ["pages", projectId] });
+      
+      const previousPages = queryClient.getQueryData(["pages", projectId]);
+      
+      // Remove imediatamente da UI
+      queryClient.setQueryData(["pages", projectId], (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.filter((page: any) => page.id !== pageId);
+      });
+      
+      return { previousPages };
     },
   });
 

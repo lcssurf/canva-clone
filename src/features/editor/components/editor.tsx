@@ -44,9 +44,9 @@ export const Editor = ({ initialData }: EditorProps) => {
   const [isSaving, setIsSaving] = useState(false);
 
   const [generatedContent, setGeneratedContent] = useState<{
-  headline: string;
-  cards: string;
-} | null>(null);
+    headline: string;
+    cards: string;
+  } | null>(null);
 
   useEffect(() => {
     console.log("generatedContent", generatedContent);
@@ -68,10 +68,10 @@ export const Editor = ({ initialData }: EditorProps) => {
       onSuccess: async (data: any) => {
         await refetchPages();
         console.log("Page created successfully", data);
-        
+
         if (data?.data?.id) {
           setActivePageId(data.data?.id);
-        } 
+        }
       }
     });
   };
@@ -101,7 +101,7 @@ export const Editor = ({ initialData }: EditorProps) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSave = useCallback(
     debounce(
-     async (values: {
+      async (values: {
         json: string,
         height: number,
         width: number,
@@ -109,17 +109,17 @@ export const Editor = ({ initialData }: EditorProps) => {
         setIsSaving(true);
         // mutate(values);
         try {
-        await updatePage({
-          pageId: activePageId,
-          data: {
-            fabricState: values.json,
-            height: values.height,
-            width: values.width,
-          }
-        });
-      } finally {
-        setIsSaving(false);
-      }
+          await updatePage({
+            pageId: activePageId,
+            data: {
+              fabricState: values.json,
+              height: values.height,
+              width: values.width,
+            }
+          });
+        } finally {
+          setIsSaving(false);
+        }
       },
       200
     ), [updatePage, activePageId]);
@@ -190,9 +190,9 @@ export const Editor = ({ initialData }: EditorProps) => {
 
   useEffect(() => {
     // const timeout = setTimeout(() => {
-      if (editor?.loadJson && pageData?.fabricState) {
-        editor.loadJson(pageData.fabricState);
-      }
+    if (editor?.loadJson && pageData?.fabricState) {
+      editor.loadJson(pageData.fabricState);
+    }
     // }, 0);
 
     // return () => clearTimeout(timeout);
@@ -209,7 +209,8 @@ export const Editor = ({ initialData }: EditorProps) => {
 
 
       <PagesNavigation
-      pending = {pendingCreatePage}
+      initialData={initialData}
+        pending={pendingCreatePage}
         projectId={initialData.id}
         createPage={() => handleCreatePage()}
         activePageId={String(activePageId)}
@@ -274,7 +275,7 @@ export const Editor = ({ initialData }: EditorProps) => {
           onChangeActiveTool={onChangeActiveTool}
         />
         <AiSidebar
-        projectId= {initialData.id}
+          projectId={initialData.id}
           generatedContent={generatedContent}
           setGeneratedContent={setGeneratedContent}
           activeTool={activeTool}

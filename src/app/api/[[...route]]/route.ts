@@ -8,7 +8,7 @@ import images from "./images";
 import projects from "./projects";
 import subscriptions from "./subscriptions";
 import transcription from "./transcription";
-
+import image_proxy from "./image_proxy"
 import authConfig from "@/auth.config";
 
 // Revert to "edge" if planning on running on the edge
@@ -32,6 +32,7 @@ const routes = app
   .route("/projects", projects)
   .route("/subscriptions", subscriptions)
   .route("/transcription", transcription)
+  .route("/image-proxy", image_proxy);
 
 export const GET = handle(app);
 export const POST = handle(app);
