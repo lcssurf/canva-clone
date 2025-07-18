@@ -45,6 +45,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { DragEndEvent } from '@dnd-kit/core';
+import { restrictToHorizontalAxis, restrictToParentElement } from '@dnd-kit/modifiers'
+import { useReorderPages } from "@/features/pages/api/use-reorder-pages";
 
 interface Page {
   id: string;
@@ -79,6 +81,7 @@ export const PagesNavigation = ({
   const updatePageMutation  = useUpdatePage(projectId);
   const deletePageMutation = useDeletePage(projectId);
   const createPageMutation = useCreatePage(projectId);
+  const reorderPagesMutation = useReorderPages(projectId);
 
   const sensors = useSensors(
   useSensor(PointerSensor),
@@ -89,18 +92,26 @@ export const PagesNavigation = ({
 
 
 
-const handleDragEnd = (event: DragEndEvent) => {
+const handleDragEnd = async (event: DragEndEvent) => {
   const { active, over } = event;
 
   if (active && over && active.id !== over.id) {
     const oldIndex = pages.findIndex(p => p.id === active.id);
     const newIndex = pages.findIndex(p => p.id === over.id);
     
-    // Atualizar ordem local imediatamente
-    const newOrder = arrayMove(pages, oldIndex, newIndex);
+    const reorderedPages = arrayMove(pages, oldIndex, newIndex);
     
-    // TODO: Chamar API para salvar nova ordem
-    console.log('New order:', newOrder.map(p => ({ id: p.id, order: p.order })));
+    // ✅ Chamar API para salvar nova ordem
+    try {
+      await reorderPagesMutation.mutateAsync({
+        pages: reorderedPages.map((page, index) => ({
+          id: page.id,
+          order: index
+        }))
+      });
+    } catch (error) {
+      console.error("Error reordering pages:", error);
+    }
   }
 };
 
@@ -166,21 +177,21 @@ const handleDuplicatePage = async (page: Page) => {
 
   if (pages.length === 0) {
     return (
-      <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 overflow-x-auto">
+      <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 overflow-x-auto overflow-y-hidden">
         <Loader className="h-6 w-6 animate-spin text-gray-500" />
       </div>
     );
   }
 
   return (
-    <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 overflow-x-auto">
+    <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 overflow-x-auto overflow-y-hidden">
       <TooltipProvider>
         {/* Lista de Páginas */}
-        <div className="flex items-center gap-1 flex-1 min-w-0">
+        {/* <div className="flex items-center gap-1 flex-1 min-w-0">
           {pages.map((page, index) => (
-            <div key={page.id} className="flex items-center gap-1">
+            <div key={page.id} className="flex items-center gap-1"> */}
               {/* Tab da Página */}
-              <Tooltip>
+              {/* <Tooltip>
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
@@ -190,9 +201,9 @@ const handleDuplicatePage = async (page: Page) => {
                         : "bg-gray-50 border border-transparent text-gray-600 hover:text-gray-900"
                     )}
                     onClick={() => setActivePageId(page.id)}
-                  >
+                  > */}
                     {/* Nome da Página */}
-                    {editingPageId === page.id ? (
+                    {/* {editingPageId === page.id ? (
                       <Input
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
@@ -209,10 +220,10 @@ const handleDuplicatePage = async (page: Page) => {
                       <span className="text-xs font-medium truncate max-w-16">
                         {page.title || `Page ${index + 1}`}
                       </span>
-                    )}
+                    )} */}
 
                     {/* Menu de Ações */}
-                    {activePageId === page.id && (
+                    {/* {activePageId === page.id && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -258,7 +269,42 @@ const handleDuplicatePage = async (page: Page) => {
               </Tooltip>
             </div>
           ))}
-        </div>
+        </div> */}
+
+        {/* Lista de Páginas */}
+<DndContext
+  sensors={sensors}
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEnd}
+  modifiers={[restrictToHorizontalAxis, restrictToParentElement]}
+>
+  <div className="flex items-center gap-1 flex-1 min-w-0 h-full">
+    <SortableContext
+      items={pages.map(p => p.id)}
+      strategy={horizontalListSortingStrategy}
+    >
+      {pages.map((page, index) => (
+        <SortablePageTab
+          key={page.id}
+          page={page}
+          index={index}
+          activePageId={activePageId}
+          setActivePageId={setActivePageId}
+          editingPageId={editingPageId}
+          editTitle={editTitle}
+          setEditTitle={setEditTitle}
+          handleSaveTitle={handleSaveTitle}
+          handleEditTitle={handleEditTitle}
+          handleDuplicatePage={handleDuplicatePage}
+          handleDeletePage={handleDeletePage}
+          updatePageMutation={updatePageMutation}
+          deletePageMutation={deletePageMutation}
+          setEditingPageId={setEditingPageId}
+        />
+      ))}
+    </SortableContext>
+  </div>
+</DndContext>
 
         {/* Botão Adicionar Página */}
         <Tooltip>
@@ -276,6 +322,140 @@ const handleDuplicatePage = async (page: Page) => {
           <TooltipContent>Add Page</TooltipContent>
         </Tooltip>
       </TooltipProvider>
+    </div>
+  );
+};
+
+
+interface SortablePageTabProps {
+  page: Page;
+  index: number;
+  activePageId: string;
+  setActivePageId: (id: string) => void;
+  editingPageId: string | null;
+  editTitle: string;
+  setEditTitle: (title: string) => void;
+  handleSaveTitle: () => void;
+  handleEditTitle: (page: Page) => void;
+  handleDuplicatePage: (page: Page) => void;
+  handleDeletePage: (pageId: string) => void;
+  updatePageMutation: any;
+  deletePageMutation: any;
+  setEditingPageId: (id: string | null) => void;
+}
+
+const SortablePageTab = ({ 
+  page, 
+  index, 
+  activePageId, 
+  setActivePageId,
+  editingPageId,
+  editTitle,
+  setEditTitle,
+  handleSaveTitle,
+  handleEditTitle,
+  handleDuplicatePage,
+  handleDeletePage,
+  updatePageMutation,
+  deletePageMutation,
+  setEditingPageId 
+}: SortablePageTabProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: page.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="flex items-center gap-1"
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+          className={cn(
+            "group relative flex items-center gap-2 px-3 py-1.5 rounded-md cursor-pointer transition-all hover:bg-gray-50",
+            activePageId === page.id
+              ? "bg-blue-50 border border-blue-200 text-blue-700"
+              : "bg-gray-50 border border-transparent text-gray-600 hover:text-gray-900"
+          )}
+          onClick={() => setActivePageId(page.id)} // ← Click funciona aqui
+        >
+          {/* ✅ ÁREA DE DRAG - só um pequeno handle */}
+          <div 
+            {...listeners} // ← Drag listeners APENAS nesta área
+            className="flex items-center justify-center w-2 h-4 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-50 hover:opacity-100 transition-opacity"
+          >
+            <div className="w-1 h-full bg-gray-400 rounded-full"></div>
+          </div>
+            {/* Nome da Página */}
+            {editingPageId === page.id ? (
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onBlur={handleSaveTitle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveTitle();
+                  if (e.key === "Escape") setEditingPageId(null);
+                }}
+                className="h-6 w-20 text-xs px-1"
+                autoFocus
+                disabled={updatePageMutation.isPending}
+              />
+            ) : (
+              <span className="text-xs font-medium truncate max-w-20">
+                {page.title || `Page ${index + 1}`}
+              </span>
+            )}
+
+            {/* Menu de Ações */}
+            {activePageId === page.id && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <MoreHorizontal className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-40">
+                  <DropdownMenuItem onClick={() => handleEditTitle(page)}>
+                    <Edit3 className="h-3 w-3 mr-2" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDuplicatePage(page)}>
+                    <Copy className="h-3 w-3 mr-2" />
+                    Duplicate
+                  </DropdownMenuItem>
+                  {/* Resto igual... */}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="text-center">
+            <div className="font-medium">{page.title || `Page ${index + 1}`}</div>
+            <div className="text-xs text-gray-500">
+              {page.width} × {page.height}px
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 };

@@ -40,7 +40,7 @@ const app = new Hono()
         .select()
         .from(pages)
         .where(eq(pages.projectId, projectId))
-        .orderBy(asc(pages.createdAt));
+        .orderBy(asc(pages.order));
 
       return c.json({ data });
     }
@@ -109,6 +109,66 @@ const app = new Hono()
       return c.json({ data: newPage }, 201);
     }
   )
+   // Reordenar páginas
+.patch(
+  "/:projectId/pages/reorder",
+  verifyAuth(),
+  zValidator("param", z.object({ projectId: z.string() })),
+  zValidator(
+    "json",
+    z.object({
+      pages: z.array(z.object({
+        id: z.string(),
+        order: z.number()
+      }))
+    })
+  ),
+  async (c) => {
+    const auth = c.get("authUser");
+    const { projectId } = c.req.valid("param");
+    const { pages: pageUpdates } = c.req.valid("json");
+
+    if (!auth.token?.id) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Verificar se o projeto pertence ao usuário
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(
+        and(eq(projects.id, projectId), eq(projects.userId, auth.token.id))
+      );
+
+    if (!project) {
+      return c.json({ error: "Project not found or unauthorized" }, 404);
+    }
+
+    // Atualizar ordem de cada página
+    try {
+      for (const pageUpdate of pageUpdates) {
+        await db
+          .update(pages)
+          .set({
+            order: pageUpdate.order,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(pages.id, pageUpdate.id),
+              eq(pages.projectId, projectId)
+            )
+          );
+      }
+
+      return c.json({ success: true }, 200);
+    } catch (error) {
+      console.error("Error reordering pages:", error);
+      return c.json({ error: "Failed to reorder pages" }, 500);
+    }
+  }
+)
+
 
   // Obter dados completos de uma página específica
   .get(
@@ -260,7 +320,7 @@ const app = new Hono()
       return c.json({ data: { id: pageId } });
     }
   )
-
+ 
   // ##### ROTAS PROJECT ##### -------------------------------------------------------
   .get(
     "/templates",
