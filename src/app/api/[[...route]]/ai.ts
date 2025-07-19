@@ -20,7 +20,7 @@ const generateContentSchema = z.object({
     content: z.string().optional(),
     transcription: z.string().optional(),
     aiTranscription: z.string().optional(),
-  })).min(1, "Pelo menos um post deve ser selecionado"),
+  })).optional(),
 });
 
 const app = new Hono()
@@ -179,7 +179,7 @@ const app = new Hono()
               goal: validatedData.goal,
               format: validatedData.format,
               generatedAt: new Date().toISOString(),
-              postsUsed: validatedData.selectedPosts.length,
+              postsUsed: validatedData.selectedPosts?.length ?? 0,
             }
           }
         });
